@@ -38,7 +38,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
       : 'text-[15px] leading-relaxed';
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden border-l border-gray-300">
+    <div className="flex flex-col h-full bg-white overflow-hidden">
       {/* Question Content Area */}
       <div ref={containerRef} className="p-8 flex flex-col gap-10 overflow-y-auto flex-1">
         {questions.map((q, index) => {
@@ -52,34 +52,8 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
             >
               {/* Options above text for True/False/Not Given or Multiple Choice as per IELTS sometimes, but typically IELTS shows options then text? Actually it usually shows the question first for MC. Let's just put options above if True/False. */}
               
-              {(q.type === 'true-false-not-given' || q.type === 'yes-no-not-given' || q.type === 'multiple-choice') && q.options && (
-                <div className="mb-4 space-y-3 pl-[3.25rem]">
-                  {q.options.map((opt) => {
-                    const isSelected = currentAnswer === opt.value;
-                    return (
-                      <label
-                        key={opt.value}
-                        onClick={() => onAnswerChange(q.id, opt.value)}
-                        className="flex items-center cursor-pointer group"
-                      >
-                        <div className="relative flex items-center justify-center">
-                          <input
-                            type="radio"
-                            name={`q-${q.id}`}
-                            checked={isSelected}
-                            onChange={() => {}}
-                            className="w-[18px] h-[18px] border-gray-400 text-black focus:ring-0 cursor-pointer accent-black"
-                          />
-                        </div>
-                        <span className="ml-3 text-[15px] text-black uppercase">{opt.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-
               <div className="flex items-start">
-                <span className="w-8 h-8 border-[2px] border-[#00529b] text-[#00529b] font-bold text-[15px] flex items-center justify-center shrink-0 mr-3 mt-0.5 rounded-sm">
+                <span className="w-8 h-8 border border-[#00529b] text-[#00529b] text-[15px] flex items-center justify-center shrink-0 mr-3 mt-0.5 rounded-sm shadow-[2px_0_0_#00529b]">
                   {q.questionNumber}
                 </span>
                 
@@ -111,6 +85,33 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                   })()}
                 </div>
               </div>
+
+              {/* Options below text for True/False/Not Given or Multiple Choice */}
+              {(q.type === 'true-false-not-given' || q.type === 'yes-no-not-given' || q.type === 'multiple-choice') && q.options && (
+                <div className="mt-4 space-y-3 pl-[3.25rem]">
+                  {q.options.map((opt) => {
+                    const isSelected = currentAnswer === opt.value;
+                    return (
+                      <label
+                        key={opt.value}
+                        onClick={() => onAnswerChange(q.id, opt.value)}
+                        className="flex items-center cursor-pointer group"
+                      >
+                        <div className="relative flex items-center justify-center">
+                          <input
+                            type="radio"
+                            name={`q-${q.id}`}
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-[16px] h-[16px] border-gray-400 text-black focus:ring-0 cursor-pointer accent-black"
+                          />
+                        </div>
+                        <span className="ml-3 text-[15px] text-black uppercase tracking-wide">{opt.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Input Controls Based on Question Type (For Fill in Blank only, since MC/TF is above) */}
               <div className="mt-4 pl-[3.25rem]">

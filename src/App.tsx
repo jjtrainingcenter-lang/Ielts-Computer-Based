@@ -58,9 +58,22 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
-  const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(true);
+  const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
+  // Sync active passage with current question
+  useEffect(() => {
+    if (activeSection === 'reading') {
+      const currentQ = currentTest.readingQuestions[currentQuestionIndex];
+      if (currentQ) {
+        const partNum = currentQ.partNumber || (currentQ.passageId ? parseInt(currentQ.passageId.replace('p', '')) : 1);
+        const correspondingPassage = currentTest.readingPassages.find(p => p.partNumber === partNum);
+        if (correspondingPassage && correspondingPassage.id !== activePassageId) {
+          setActivePassageId(correspondingPassage.id);
+        }
+      }
+    }
+  }, [currentQuestionIndex, activeSection, currentTest]);
   // Fetch from Firebase
   useEffect(() => {
     const fetchTests = async () => {
@@ -255,10 +268,12 @@ export default function App() {
         onAdminClick={handleAdminClick}
       />
 
-      {/* Instruction Banner */}
-      <div className="bg-[#f0f0f0] border-b border-gray-300 py-4 px-8 text-black">
-        <h2 className="font-bold text-sm mb-1">Part 1</h2>
-        <p className="text-sm">Read the text and answer questions 1–13.</p>
+      {/* Instruction Banner Area */}
+      <div className="bg-white pt-4 px-6 pb-2">
+        <div className="bg-[#f5f5f5] rounded-sm py-3 px-5 text-black border border-gray-200">
+          <h2 className="font-bold text-[15px] mb-1">Part 1</h2>
+          <p className="text-[14px]">Read the text and answer questions 1–13.</p>
+        </div>
       </div>
 
       {/* Main Workspace Area */}
@@ -279,10 +294,9 @@ export default function App() {
             </div>
             
             {/* Splitter */}
-            <div className="w-12 bg-white border-l border-gray-300 flex flex-col items-center pt-32 relative shrink-0">
-              <div className="absolute top-0 bottom-0 left-1/2 w-0 border-l-[3px] border-gray-300"></div>
-              <div className="w-6 h-8 bg-white border border-gray-400 rounded-sm flex items-center justify-center z-10 cursor-col-resize cursor-pointer text-gray-500">
-                <span className="text-lg leading-none mt-[-2px]">↔</span>
+            <div className="w-8 bg-white flex flex-col items-center justify-center relative shrink-0 border-x border-gray-200">
+              <div className="w-6 h-10 bg-[#f5f5f5] border border-gray-300 rounded-full flex items-center justify-center z-10 cursor-col-resize text-gray-500 shadow-sm">
+                <span className="text-sm font-bold leading-none">{'<>'}</span>
               </div>
             </div>
 
