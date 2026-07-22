@@ -1,1 +1,28 @@
 @import "tailwindcss";
+
+/* IELTS CBT Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-left: 1px solid #e5e7eb;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 8px;
+  border: 3px solid #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.ielts-scroll {
+  /* For Firefox */
+  scrollbar-width: auto;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}

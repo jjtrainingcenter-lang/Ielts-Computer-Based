@@ -260,7 +260,7 @@ export default function App() {
       : 'bg-white text-slate-900';
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans ${themeClass} select-none`}>
+    <div className={`h-screen w-screen flex flex-col font-sans ${themeClass} select-none overflow-hidden`}>
       {/* Top Inspera Header */}
       <Header
         candidateName={candidateName}
