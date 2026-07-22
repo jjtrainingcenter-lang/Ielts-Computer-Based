@@ -252,41 +252,51 @@ export default function App() {
       <Header
         candidateName={candidateName}
         candidateId={candidateId}
-        testTitle={currentTest.title}
-        activeSection={activeSection}
-        onSelectSection={handleSelectSection}
-        timeRemainingSeconds={timeRemainingSeconds}
-        settings={settings}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
-        onOpenHelp={() => setIsHelpModalOpen(true)}
-        onFinishTest={() => setIsResultsModalOpen(true)}
-        answeredCount={totalAnsweredCount}
-        totalQuestions={totalQuestions}
+        onAdminClick={handleAdminClick}
       />
+
+      {/* Instruction Banner */}
+      <div className="bg-[#f0f0f0] border-b border-gray-300 py-4 px-8 text-black">
+        <h2 className="font-bold text-sm mb-1">Part 1</h2>
+        <p className="text-sm">Read the text and answer questions 1–13.</p>
+      </div>
 
       {/* Main Workspace Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* READING SECTION (Split Pane) */}
         {activeSection === 'reading' && (
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden">
-            <PassageViewer
-              passages={currentTest.readingPassages}
-              activePassageId={activePassageId}
-              onSelectPassage={setActivePassageId}
-              highlights={highlights}
-              onAddHighlight={handleAddHighlight}
-              onRemoveHighlight={handleRemoveHighlight}
-              settings={settings}
-            />
-            <QuestionPane
-              questions={currentTest.readingQuestions}
-              currentQuestionIndex={currentQuestionIndex}
-              userAnswers={userAnswers}
-              onAnswerChange={handleAnswerChange}
-              flaggedQuestions={flaggedQuestions}
-              onToggleFlag={handleToggleFlag}
-              settings={settings}
-            />
+          <div className="flex-1 flex overflow-hidden bg-white">
+            <div className="flex-1 overflow-hidden relative">
+              <PassageViewer
+                passages={currentTest.readingPassages}
+                activePassageId={activePassageId}
+                onSelectPassage={setActivePassageId}
+                highlights={highlights}
+                onAddHighlight={handleAddHighlight}
+                onRemoveHighlight={handleRemoveHighlight}
+                settings={settings}
+              />
+            </div>
+            
+            {/* Splitter */}
+            <div className="w-12 bg-white border-l border-gray-300 flex flex-col items-center pt-32 relative shrink-0">
+              <div className="absolute top-0 bottom-0 left-1/2 w-0 border-l-[3px] border-gray-300"></div>
+              <div className="w-6 h-8 bg-white border border-gray-400 rounded-sm flex items-center justify-center z-10 cursor-col-resize cursor-pointer text-gray-500">
+                <span className="text-lg leading-none mt-[-2px]">↔</span>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-hidden">
+              <QuestionPane
+                questions={currentTest.readingQuestions}
+                currentQuestionIndex={currentQuestionIndex}
+                userAnswers={userAnswers}
+                onAnswerChange={handleAnswerChange}
+                flaggedQuestions={flaggedQuestions}
+                onToggleFlag={handleToggleFlag}
+                settings={settings}
+              />
+            </div>
           </div>
         )}
 
@@ -347,11 +357,6 @@ export default function App() {
           currentQuestionIndex={currentQuestionIndex}
           onSelectQuestionIndex={setCurrentQuestionIndex}
           userAnswers={userAnswers}
-          flaggedQuestions={flaggedQuestions}
-          onToggleFlag={handleToggleFlag}
-          onOpenReviewModal={() => setIsReviewModalOpen(true)}
-          activeSection={activeSection}
-          onAdminClick={handleAdminClick}
         />
       )}
 

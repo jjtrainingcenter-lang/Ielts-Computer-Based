@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -10,16 +11,18 @@ const isConfigured = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY_HERE";
 let app;
 let auth;
 let db;
+let storage;
 let googleProvider;
 
 if (isConfigured) {
   app = getApps().length === 0 ? initializeApp(firebaseConfig as any) : getApp();
   auth = getAuth(app);
   db = getFirestore(app);
+  storage = getStorage(app);
   googleProvider = new GoogleAuthProvider();
 }
 
-export { app, auth, db, googleProvider, isConfigured };
+export { app, auth, db, storage, googleProvider, isConfigured };
 
 export const signInWithGoogle = async () => {
   if (!isConfigured) {
