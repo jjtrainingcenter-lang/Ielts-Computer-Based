@@ -1,0 +1,6 @@
+{
+  "name": "JJ Academy IELTS Computer Based Test",
+  "description": "Authentic Inspera-style computer-based IELTS test player for JJ Academy featuring Listening, Reading, Writing, and Speaking modules with real-time word counter, text highlighter, notes, and band score evaluation.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
