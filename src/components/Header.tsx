@@ -21,7 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="font-extrabold text-3xl tracking-tighter" style={{ fontFamily: 'Arial, sans-serif' }}>IELTS</span>
             <span className="text-[10px] mt-1 ml-0.5">TM</span>
           </div>
-          <div className="text-sm font-bold text-black mt-1">
+          <div className="text-sm font-bold text-black mt-1 cursor-default" onClick={onAdminClick}>
             Test taker ID
           </div>
         </div>
@@ -34,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button type="button" className="hover:opacity-70 transition-opacity">
             <Bell className="w-5 h-5" />
           </button>
-          <button type="button" className="hover:opacity-70 transition-opacity" onClick={onAdminClick}>
+          <button type="button" className="hover:opacity-70 transition-opacity">
             <Menu className="w-5 h-5" />
           </button>
           <button type="button" className="hover:opacity-70 transition-opacity">
@@ -45,4 +45,3 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
-

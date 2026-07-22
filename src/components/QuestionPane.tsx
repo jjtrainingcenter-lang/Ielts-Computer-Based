@@ -40,7 +40,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">
       {/* Question Content Area */}
-      <div ref={containerRef} className="p-8 flex flex-col gap-10 overflow-y-auto flex-1">
+      <div ref={containerRef} className="p-8 flex flex-col gap-10 overflow-y-auto flex-1 ielts-scroll">
         {questions.map((q, index) => {
           const currentAnswer = userAnswers[q.id] || '';
           
