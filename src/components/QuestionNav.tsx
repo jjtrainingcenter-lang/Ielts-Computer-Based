@@ -11,6 +11,7 @@ interface QuestionNavProps {
   onToggleFlag: (qId: string) => void;
   onOpenReviewModal: () => void;
   activeSection: TestSection;
+  onAdminClick?: () => void;
 }
 
 export const QuestionNav: React.FC<QuestionNavProps> = ({
@@ -22,6 +23,7 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
   onToggleFlag,
   onOpenReviewModal,
   activeSection,
+  onAdminClick,
 }) => {
   if (!questions || questions.length === 0) return null;
 
@@ -123,7 +125,7 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
 
       {/* Sub-Footer Candidate Metadata Line */}
       <div className="h-6 bg-[#214162]/5 flex items-center justify-between px-6 text-[10px] text-gray-500 font-medium uppercase tracking-tight">
-        <span>IELTS Computer Based Test • Section: {activeSection}</span>
+        <span className="cursor-pointer" onClick={onAdminClick}>IELTS Computer Based Test • Section: {activeSection}</span>
         <span>JJ ACADEMY Inspera Engine v2.4</span>
       </div>
     </footer>

@@ -12,16 +12,23 @@ import { DisplaySettingsModal } from './components/DisplaySettingsModal';
 import { ReviewModal } from './components/ReviewModal';
 import { TestResultsModal } from './components/TestResultsModal';
 import { TestSelectorModal } from './components/TestSelectorModal';
+import { AdminDashboard } from './components/AdminDashboard';
+import { signInWithGoogle, db, isConfigured } from './lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 import { HelpCircle, X, ShieldAlert } from 'lucide-react';
 
 export default function App() {
   // Test State
+  const [availableTests, setAvailableTests] = useState<IELTSTest[]>([ACADEMIC_TEST_1]);
   const [currentTest, setCurrentTest] = useState<IELTSTest>(ACADEMIC_TEST_1);
   const [candidateName, setCandidateName] = useState('John Doe');
   const [candidateId, setCandidateId] = useState('JJ-883920');
   const [activeSection, setActiveSection] = useState<TestSection>('reading');
   const [activePassageId, setActivePassageId] = useState<string>('p1');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+
+  // Admin State
+  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
 
   // User Responses
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
@@ -51,8 +58,26 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
-  const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
+  const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(true);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+
+  // Fetch from Firebase
+  useEffect(() => {
+    const fetchTests = async () => {
+      if (!isConfigured) return;
+      try {
+        const testsCol = collection(db, 'tests');
+        const snapshot = await getDocs(testsCol);
+        const fetchedTests = snapshot.docs.map(doc => doc.data() as IELTSTest);
+        if (fetchedTests.length > 0) {
+          setAvailableTests([ACADEMIC_TEST_1, ...fetchedTests]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch tests:", err);
+      }
+    };
+    fetchTests();
+  }, []);
 
   // Timer countdown hook
   useEffect(() => {
@@ -196,6 +221,17 @@ export default function App() {
     setIsSelectorModalOpen(false);
   };
 
+  const handleAdminClick = async () => {
+    try {
+      const user = await signInWithGoogle();
+      if (user) {
+        setIsAdminDashboardOpen(true);
+      }
+    } catch (e) {
+      // Ignored or logged
+    }
+  };
+
   // Answered count across all questions
   const totalQuestions = currentTest.listeningQuestions.length + currentTest.readingQuestions.length;
   const totalAnsweredCount = Object.keys(userAnswers).filter((k) => userAnswers[k]?.trim().length > 0).length;
@@ -315,10 +351,15 @@ export default function App() {
           onToggleFlag={handleToggleFlag}
           onOpenReviewModal={() => setIsReviewModalOpen(true)}
           activeSection={activeSection}
+          onAdminClick={handleAdminClick}
         />
       )}
 
       {/* Modals */}
+      {isAdminDashboardOpen && (
+        <AdminDashboard onClose={() => setIsAdminDashboardOpen(false)} />
+      )}
+
       <DisplaySettingsModal
         isOpen={isSettingsModalOpen}
         settings={settings}
@@ -350,7 +391,7 @@ export default function App() {
 
       <TestSelectorModal
         isOpen={isSelectorModalOpen}
-        availableTests={[ACADEMIC_TEST_1]}
+        availableTests={availableTests}
         onStartTest={handleStartTest}
       />
 
