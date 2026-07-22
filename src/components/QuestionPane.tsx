@@ -71,12 +71,37 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
 
         <div className="bg-white p-6 rounded shadow-xs border border-gray-200 space-y-5">
           <div className="flex items-start space-x-3">
-            <span className="w-7 h-7 rounded bg-[#214162] text-white font-bold text-xs flex items-center justify-center shrink-0">
+            <span className="w-7 h-7 rounded bg-[#214162] text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
               {currentQ.questionNumber}
             </span>
-            <p className={`text-sm font-bold text-gray-800 leading-relaxed pt-0.5 ${fontClass}`}>
-              {currentQ.questionText}
-            </p>
+            <div className={`text-sm font-bold text-gray-800 leading-relaxed pt-0.5 flex-1 ${fontClass}`}>
+              {(() => {
+                if (currentQ.type === 'fill-blank' && (currentQ.questionText.includes('___') || currentQ.questionText.includes('[BLANK]'))) {
+                  const parts = currentQ.questionText.split(/___|\[BLANK\]/g);
+                  return (
+                    <span className="leading-loose inline-flex items-center flex-wrap gap-y-2">
+                      {parts.map((part, i) => (
+                        <React.Fragment key={i}>
+                          <span>{part}</span>
+                          {i < parts.length - 1 && (
+                            <span className="inline-block relative mx-2 align-middle">
+                              <input
+                                type="text"
+                                value={currentAnswer}
+                                onChange={(e) => onAnswerChange(currentQ.id, e.target.value)}
+                                className="border-2 border-[#214162] text-center font-bold bg-blue-50 focus:bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#214162] rounded px-2 py-1 w-32 md:w-48 text-sm"
+                                placeholder={currentQ.questionNumber.toString()}
+                              />
+                            </span>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </span>
+                  );
+                }
+                return <span>{currentQ.questionText}</span>;
+              })()}
+            </div>
           </div>
 
           {/* Input Controls Based on Question Type */}
@@ -114,7 +139,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
               )}
 
             {/* Fill In Blank / Text Box Input */}
-            {currentQ.type === 'fill-blank' && (
+            {currentQ.type === 'fill-blank' && !currentQ.questionText.includes('___') && !currentQ.questionText.includes('[BLANK]') && (
               <div className="space-y-2 max-w-md">
                 <span className="text-xs font-bold uppercase tracking-wider text-gray-500 block">
                   Type your answer below:

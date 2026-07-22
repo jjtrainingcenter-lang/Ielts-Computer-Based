@@ -40,15 +40,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   "listeningQuestions": [
     {
       "id": "l1",
-      "type": "multiple-choice",
+      "type": "fill-blank",
       "questionNumber": 1,
-      "questionText": "What is the main topic of the conversation?",
-      "options": [
-        { "label": "A) Option 1", "value": "A" },
-        { "label": "B) Option 2", "value": "B" }
-      ],
-      "correctAnswer": "A",
-      "explanation": "Option A is mentioned in the beginning."
+      "questionText": "When uranium was discovered to be radioactive, Marie Curie found that the element called ___ had the same property.",
+      "correctAnswer": "thorium",
+      "explanation": "Thorium was also found to be radioactive."
     }
   ],
   "readingPassages": [],
