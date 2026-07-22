@@ -227,8 +227,8 @@ export default function App() {
       if (user) {
         setIsAdminDashboardOpen(true);
       }
-    } catch (e) {
-      // Ignored or logged
+    } catch (e: any) {
+      alert(`Sign in failed: ${e.message}`);
     }
   };
 
