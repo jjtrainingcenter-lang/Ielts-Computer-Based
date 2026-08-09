@@ -2,18 +2,85 @@ import React, { useState } from 'react';
 import { db, storage, logout, isConfigured } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { X, LogOut, Save, Plus, Trash2, UploadCloud, Edit3, Code } from 'lucide-react';
+import { X, LogOut, Save, Plus, Trash2, UploadCloud, Edit3, Code, FileJson, Copy, Check } from 'lucide-react';
 import { TestConfiguration, Question, ReadingPassage } from '../types';
 
 interface AdminDashboardProps {
   onClose: () => void;
 }
 
+const SAMPLE_LISTENING_QUESTIONS: Question[] = [
+  {
+    id: 'l1',
+    section: 'listening',
+    partNumber: 1,
+    questionNumber: 1,
+    instruction: 'Write ONE WORD AND/OR A NUMBER for each answer.',
+    questionText: 'Customer phone number: ___',
+    type: 'fill-blank',
+    correctAnswer: '07700900123',
+    explanation: 'The speaker provides their phone number in Part 1 conversation.'
+  },
+  {
+    id: 'l2',
+    section: 'listening',
+    partNumber: 1,
+    questionNumber: 2,
+    instruction: 'Choose the correct letter, A, B, or C.',
+    questionText: 'Which day will the venue be available?',
+    type: 'multiple-choice',
+    options: [
+      { value: 'A', label: 'A) Thursday' },
+      { value: 'B', label: 'B) Friday' },
+      { value: 'C', label: 'C) Saturday' }
+    ],
+    correctAnswer: 'B',
+    explanation: 'The coordinator confirms Friday availability.'
+  }
+];
+
+const SAMPLE_READING_QUESTIONS: Question[] = [
+  {
+    id: 'r1',
+    section: 'reading',
+    passageId: 'p1',
+    partNumber: 1,
+    questionNumber: 1,
+    instruction: 'Do the following statements agree with the information in Reading Passage 1? Write TRUE, FALSE, or NOT GIVEN.',
+    questionText: 'Urban transportation accounts for roughly 24 percent of carbon emissions.',
+    type: 'true-false-not-given',
+    options: [
+      { value: 'TRUE', label: 'TRUE' },
+      { value: 'FALSE', label: 'FALSE' },
+      { value: 'NOT GIVEN', label: 'NOT GIVEN' }
+    ],
+    correctAnswer: 'TRUE',
+    explanation: 'Paragraph 1 explicitly confirms 24 percent of direct carbon dioxide emissions.'
+  },
+  {
+    id: 'r2',
+    section: 'reading',
+    passageId: 'p1',
+    partNumber: 1,
+    questionNumber: 2,
+    instruction: 'Complete the sentence. Write NO MORE THAN TWO WORDS from the passage.',
+    questionText: 'Electric buses are recharged using ultra-fast ___ systems.',
+    type: 'fill-blank',
+    correctAnswer: 'pantograph',
+    explanation: 'Paragraph 2 mentions pantograph systems.'
+  }
+];
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<'visual' | 'json'>('visual');
   const [status, setStatus] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Bulk Import Modal State
+  const [bulkModalSection, setBulkModalSection] = useState<'listening' | 'reading' | null>(null);
+  const [bulkJsonText, setBulkJsonText] = useState('');
+  const [copied, setCopied] = useState(false);
 
   // Test State
   const [testId, setTestId] = useState('custom-test-1');
@@ -106,6 +173,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     } else {
       setReadingQuestions(readingQuestions.filter((_, i) => i !== index));
     }
+  };
+
+  const handleOpenBulkModal = (sec: 'listening' | 'reading') => {
+    setBulkModalSection(sec);
+    const sample = sec === 'listening' ? SAMPLE_LISTENING_QUESTIONS : SAMPLE_READING_QUESTIONS;
+    setBulkJsonText(JSON.stringify(sample, null, 2));
+  };
+
+  const handleApplyBulkImport = () => {
+    if (!bulkModalSection) return;
+    try {
+      const parsed = JSON.parse(bulkJsonText);
+      if (!Array.isArray(parsed)) {
+        alert('Invalid format: JSON must be an array of question objects e.g. [ { ... }, { ... } ]');
+        return;
+      }
+      if (bulkModalSection === 'listening') {
+        setListeningQuestions(parsed);
+      } else {
+        setReadingQuestions(parsed);
+      }
+      setStatus(`Successfully imported ${parsed.length} ${bulkModalSection} questions!`);
+      setBulkModalSection(null);
+      setTimeout(() => setStatus(null), 3000);
+    } catch (e: any) {
+      alert(`JSON syntax error: ${e.message}`);
+    }
+  };
+
+  const handleCopySample = () => {
+    navigator.clipboard.writeText(bulkJsonText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const addReadingPassage = () => {
@@ -321,15 +421,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                 <div className="space-y-4 pt-2">
                   <div className="flex justify-between items-center">
                     <h4 className="font-bold text-gray-700">Listening Questions</h4>
-                    <button onClick={() => addQuestion('listening')} className="flex items-center space-x-1 text-sm bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 font-medium">
-                      <Plus className="w-4 h-4" />
-                      <span>Add Question</span>
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button onClick={() => handleOpenBulkModal('listening')} className="flex items-center space-x-1 text-sm bg-purple-100 text-purple-700 px-3 py-1.5 rounded hover:bg-purple-200 font-medium transition-colors">
+                        <FileJson className="w-4 h-4" />
+                        <span>Bulk Upload (JSON)</span>
+                      </button>
+                      <button onClick={() => addQuestion('listening')} className="flex items-center space-x-1 text-sm bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 font-medium transition-colors">
+                        <Plus className="w-4 h-4" />
+                        <span>Add Question</span>
+                      </button>
+                    </div>
                   </div>
 
                   {listeningQuestions.length === 0 && (
                     <div className="text-center p-6 border-2 border-dashed border-gray-200 rounded text-gray-500 text-sm">
-                      No listening questions added yet. Click "Add Question" to start building.
+                      No listening questions added yet. Click "Add Question" or "Bulk Upload (JSON)" to start building.
                     </div>
                   )}
 
@@ -376,15 +482,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                 <div className="space-y-4 pt-6 border-t mt-6">
                   <div className="flex justify-between items-center">
                     <h4 className="font-bold text-gray-700">Reading Questions</h4>
-                    <button onClick={() => addQuestion('reading')} className="flex items-center space-x-1 text-sm bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 font-medium">
-                      <Plus className="w-4 h-4" />
-                      <span>Add Question</span>
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button onClick={() => handleOpenBulkModal('reading')} className="flex items-center space-x-1 text-sm bg-purple-100 text-purple-700 px-3 py-1.5 rounded hover:bg-purple-200 font-medium transition-colors">
+                        <FileJson className="w-4 h-4" />
+                        <span>Bulk Upload (JSON)</span>
+                      </button>
+                      <button onClick={() => addQuestion('reading')} className="flex items-center space-x-1 text-sm bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 font-medium transition-colors">
+                        <Plus className="w-4 h-4" />
+                        <span>Add Question</span>
+                      </button>
+                    </div>
                   </div>
 
                   {readingQuestions.length === 0 && (
                     <div className="text-center p-6 border-2 border-dashed border-gray-200 rounded text-gray-500 text-sm">
-                      No reading questions added yet. Click "Add Question" to start building.
+                      No reading questions added yet. Click "Add Question" or "Bulk Upload (JSON)" to start building.
                     </div>
                   )}
 
@@ -430,6 +542,82 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
           </button>
         </div>
       </div>
+
+      {/* Bulk Upload Modal */}
+      {bulkModalSection && (
+        <div className="fixed inset-0 z-60 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200">
+            <div className="p-4 bg-[#214162] text-white flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <FileJson className="w-5 h-5 text-purple-300" />
+                <h3 className="font-bold text-base capitalize">
+                  Bulk Upload {bulkModalSection} Questions (JSON)
+                </h3>
+              </div>
+              <button onClick={() => setBulkModalSection(null)} className="text-gray-300 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 flex-1 overflow-y-auto text-sm">
+              <div className="bg-purple-50 border border-purple-200 rounded p-3 text-purple-900 text-xs leading-relaxed space-y-1">
+                <p className="font-bold">Format Guidance:</p>
+                <p>Paste a JSON array containing question objects. Supported question types: <code className="bg-purple-100 px-1 rounded">multiple-choice</code>, <code className="bg-purple-100 px-1 rounded font-mono">fill-blank</code>, <code className="bg-purple-100 px-1 rounded font-mono">true-false-not-given</code>.</p>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-600 uppercase">Question Array JSON</span>
+                <button
+                  type="button"
+                  onClick={handleCopySample}
+                  className="flex items-center space-x-1 text-xs text-purple-700 hover:text-purple-900 bg-purple-50 px-2.5 py-1 rounded border border-purple-200 font-medium"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'Copied Sample!' : 'Copy Sample Template'}</span>
+                </button>
+              </div>
+
+              <textarea
+                value={bulkJsonText}
+                onChange={(e) => setBulkJsonText(e.target.value)}
+                rows={14}
+                className="w-full p-3 border border-gray-300 rounded font-mono text-xs bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none"
+                placeholder="[ { ... }, { ... } ]"
+              />
+            </div>
+
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  const sample = bulkModalSection === 'listening' ? SAMPLE_LISTENING_QUESTIONS : SAMPLE_READING_QUESTIONS;
+                  setBulkJsonText(JSON.stringify(sample, null, 2));
+                }}
+                className="text-xs font-semibold text-gray-600 hover:text-gray-900 hover:underline"
+              >
+                Reset to Sample Template
+              </button>
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setBulkModalSection(null)}
+                  className="px-4 py-2 border border-gray-300 rounded text-sm text-gray-700 hover:bg-gray-100 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyBulkImport}
+                  className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm font-bold shadow-sm transition-colors flex items-center space-x-1.5"
+                >
+                  <FileJson className="w-4 h-4" />
+                  <span>Import Questions</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
