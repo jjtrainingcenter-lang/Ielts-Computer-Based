@@ -63,21 +63,28 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                       const parts = q.questionText.split(/___|\[BLANK\]/g);
                       return (
                         <span className="leading-loose inline-flex items-center flex-wrap gap-y-2">
-                          {parts.map((part, i) => (
-                            <React.Fragment key={i}>
-                              <span>{part}</span>
-                              {i < parts.length - 1 && (
-                                <span className="inline-block relative mx-2 align-middle">
-                                  <input
-                                    type="text"
-                                    value={currentAnswer}
-                                    onChange={(e) => onAnswerChange(q.id, e.target.value)}
-                                    className="border border-[#767676] text-center bg-white text-black focus:outline-none focus:ring-1 focus:ring-black px-2 py-0.5 min-w-[120px] max-w-[200px] text-[15px]"
-                                  />
-                                </span>
-                              )}
-                            </React.Fragment>
-                          ))}
+                          {parts.map((part, i) => {
+                            const blankKey = i === 0 ? q.id : `${q.id}_blank_${i}`;
+                            const blankAnswer = userAnswers[blankKey] || '';
+                            const boxNumber = q.questionNumber + i;
+
+                            return (
+                              <React.Fragment key={i}>
+                                <span>{part}</span>
+                                {i < parts.length - 1 && (
+                                  <span className="inline-block relative mx-2 align-middle">
+                                    <input
+                                      type="text"
+                                      value={blankAnswer}
+                                      onChange={(e) => onAnswerChange(blankKey, e.target.value)}
+                                      placeholder={String(boxNumber)}
+                                      className="border border-[#444] text-center bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1 min-w-[130px] max-w-[190px] text-[15px] placeholder:text-black placeholder:opacity-100 placeholder:font-bold placeholder:text-center rounded-[2px] shadow-sm transition-all"
+                                    />
+                                  </span>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
                         </span>
                       );
                     }
@@ -122,7 +129,8 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                       type="text"
                       value={currentAnswer}
                       onChange={(e) => onAnswerChange(q.id, e.target.value)}
-                      className="w-full max-w-[240px] p-1.5 border border-[#767676] text-[15px] focus:outline-none focus:border-black bg-white text-black"
+                      placeholder={String(q.questionNumber)}
+                      className="w-full max-w-[200px] border border-[#444] text-center bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1 text-[15px] placeholder:text-black placeholder:opacity-100 placeholder:font-bold placeholder:text-center rounded-[2px] shadow-sm transition-all"
                     />
                   </div>
                 )}

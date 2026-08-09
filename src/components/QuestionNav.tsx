@@ -51,7 +51,8 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
                   <div className="flex items-center space-x-1.5">
                     {data.questions.map((q, localIdx) => {
                       const globalIdx = data.startIndex + localIdx;
-                      const isAnswered = !!userAnswers[q.id] && userAnswers[q.id].trim().length > 0;
+                      const isAnswered = (!!userAnswers[q.id] && userAnswers[q.id].trim().length > 0) ||
+                        (!!userAnswers[`${q.id}_blank_1`] && userAnswers[`${q.id}_blank_1`].trim().length > 0);
                       const isCurrent = globalIdx === currentQuestionIndex;
                       
                       return (
@@ -80,7 +81,10 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
               );
             } else {
               // Render summary block
-              const answeredCount = data.questions.filter(q => !!userAnswers[q.id] && userAnswers[q.id].trim().length > 0).length;
+              const answeredCount = data.questions.filter(q => 
+                (!!userAnswers[q.id] && userAnswers[q.id].trim().length > 0) ||
+                (!!userAnswers[`${q.id}_blank_1`] && userAnswers[`${q.id}_blank_1`].trim().length > 0)
+              ).length;
               return (
                 <button
                   key={partNum}
