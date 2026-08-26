@@ -19,30 +19,66 @@ import { signInWithGoogle, db, isConfigured } from './lib/firebase';
 import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { HelpCircle, X, ShieldAlert } from 'lucide-react';
 
+const SESSION_STORAGE_KEY = 'jj_cbt_active_session_v1';
+
+interface StoredSession {
+  candidateName: string;
+  candidateId: string;
+  isLoggedIn: boolean;
+  hasConfirmedInstructions: boolean;
+  activeSection: TestSection;
+  activePassageId: string;
+  currentQuestionIndex: number;
+  userAnswers: Record<string, string>;
+  flaggedQuestions: Record<string, boolean>;
+  highlights: HighlightItem[];
+  writingTask1: string;
+  writingTask2: string;
+  timeRemainingSeconds: number;
+  isTimerRunning: boolean;
+  currentTestId: string;
+  lastSavedTimestamp: number;
+}
+
+const getInitialSession = (): StoredSession | null => {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: StoredSession = JSON.parse(raw);
+    if (!parsed || !parsed.isLoggedIn) return null;
+    return parsed;
+  } catch (e) {
+    console.error("Failed to read initial session from storage:", e);
+    return null;
+  }
+};
+
 export default function App() {
+  const initialSession = getInitialSession();
+
   // Test State
   const [availableTests, setAvailableTests] = useState<IELTSTest[]>([ACADEMIC_TEST_1]);
   const [currentTest, setCurrentTest] = useState<IELTSTest>(ACADEMIC_TEST_1);
-  const [candidateName, setCandidateName] = useState('John Doe');
-  const [candidateId, setCandidateId] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [hasConfirmedInstructions, setHasConfirmedInstructions] = useState(false);
+  const [candidateName, setCandidateName] = useState<string>(() => initialSession?.candidateName || 'John Doe');
+  const [candidateId, setCandidateId] = useState<string>(() => initialSession?.candidateId || '');
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => !!initialSession?.isLoggedIn);
+  const [hasConfirmedInstructions, setHasConfirmedInstructions] = useState<boolean>(() => !!initialSession?.hasConfirmedInstructions);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [activeSection, setActiveSection] = useState<TestSection>('reading');
-  const [activePassageId, setActivePassageId] = useState<string>('p1');
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+  const [activeSection, setActiveSection] = useState<TestSection>(() => initialSession?.activeSection || 'reading');
+  const [activePassageId, setActivePassageId] = useState<string>(() => initialSession?.activePassageId || 'p1');
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(() => initialSession?.currentQuestionIndex ?? 0);
 
   // Admin State
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
 
   // User Responses
-  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
-  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({});
-  const [highlights, setHighlights] = useState<HighlightItem[]>([]);
+  const [userAnswers, setUserAnswers] = useState<Record<string, string>>(() => initialSession?.userAnswers || {});
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>(() => initialSession?.flaggedQuestions || {});
+  const [highlights, setHighlights] = useState<HighlightItem[]>(() => initialSession?.highlights || []);
 
   // Writing & Speaking Responses
-  const [writingTask1, setWritingTask1] = useState<string>('');
-  const [writingTask2, setWritingTask2] = useState<string>('');
+  const [writingTask1, setWritingTask1] = useState<string>(() => initialSession?.writingTask1 || '');
+  const [writingTask2, setWritingTask2] = useState<string>(() => initialSession?.writingTask2 || '');
   const [writingEval, setWritingEval] = useState<WritingEvaluation | null>(null);
   const [speakingEval, setSpeakingEval] = useState<SpeakingEvaluation | null>(null);
   const [isEvaluatingAI, setIsEvaluatingAI] = useState<boolean>(false);
@@ -55,9 +91,19 @@ export default function App() {
     showTimer: true,
   });
 
-  // Timer (60 minutes for Reading, etc)
-  const [timeRemainingSeconds, setTimeRemainingSeconds] = useState<number>(3600);
-  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+  // Timer (60 minutes for Reading, etc) with elapsed recovery across reloads
+  const [timeRemainingSeconds, setTimeRemainingSeconds] = useState<number>(() => {
+    if (!initialSession) return 3600;
+    if (initialSession.isTimerRunning && initialSession.lastSavedTimestamp) {
+      const elapsed = Math.max(0, Math.floor((Date.now() - initialSession.lastSavedTimestamp) / 1000));
+      return Math.max(0, (initialSession.timeRemainingSeconds ?? 3600) - elapsed);
+    }
+    return initialSession.timeRemainingSeconds ?? 3600;
+  });
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(() => {
+    if (!initialSession) return false;
+    return !!initialSession.isTimerRunning && !!initialSession.hasConfirmedInstructions;
+  });
 
   // Modals
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -66,7 +112,53 @@ export default function App() {
   const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
-  // Prevent accidental reload
+  // Auto-persist active exam state to localStorage so student won't lose work on reload
+  useEffect(() => {
+    if (isLoggedIn && !isAdminLoggedIn) {
+      const sessionData: StoredSession = {
+        candidateName,
+        candidateId,
+        isLoggedIn,
+        hasConfirmedInstructions,
+        activeSection,
+        activePassageId,
+        currentQuestionIndex,
+        userAnswers,
+        flaggedQuestions,
+        highlights,
+        writingTask1,
+        writingTask2,
+        timeRemainingSeconds,
+        isTimerRunning,
+        currentTestId: currentTest.id,
+        lastSavedTimestamp: Date.now(),
+      };
+      try {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+      } catch (err) {
+        console.error("Failed to auto-save test session:", err);
+      }
+    }
+  }, [
+    isLoggedIn,
+    isAdminLoggedIn,
+    hasConfirmedInstructions,
+    candidateName,
+    candidateId,
+    activeSection,
+    activePassageId,
+    currentQuestionIndex,
+    userAnswers,
+    flaggedQuestions,
+    highlights,
+    writingTask1,
+    writingTask2,
+    timeRemainingSeconds,
+    isTimerRunning,
+    currentTest.id,
+  ]);
+
+  // Prevent accidental reload dialog
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isLoggedIn && !isAdminLoggedIn && hasConfirmedInstructions && isTimerRunning) {
@@ -91,6 +183,7 @@ export default function App() {
       }
     }
   }, [currentQuestionIndex, activeSection, currentTest]);
+
   // Fetch from Firebase
   useEffect(() => {
     const fetchTests = async () => {
@@ -135,11 +228,12 @@ export default function App() {
       ? currentTest.readingQuestions
       : [];
 
-
   const handleFinishTest = async () => {
     if (!window.confirm("Are you sure you want to finish the test? Your answers will be submitted.")) return;
     setIsTimerRunning(false);
     setIsResultsModalOpen(true);
+    // Clear persisted active session upon completion
+    localStorage.removeItem(SESSION_STORAGE_KEY);
     
     // Save to Firebase
     if (isConfigured) {
@@ -288,6 +382,7 @@ export default function App() {
     setTimeRemainingSeconds(3600);
     setIsTimerRunning(true);
     setIsSelectorModalOpen(false);
+    setHasConfirmedInstructions(true);
   };
 
   const handleAdminClick = async () => {
@@ -350,7 +445,13 @@ export default function App() {
       <Header
         candidateName={candidateName}
         candidateId={candidateId}
+        timeRemainingSeconds={timeRemainingSeconds}
+        showTimer={settings.showTimer}
+        onToggleTimer={() => setSettings((prev) => ({ ...prev, showTimer: !prev.showTimer }))}
         onAdminClick={handleAdminClick}
+        onFinishTest={handleFinishTest}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenHelp={() => setIsHelpModalOpen(true)}
       />
 
       {/* Instruction Banner Area */}
