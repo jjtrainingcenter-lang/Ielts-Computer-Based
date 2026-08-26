@@ -83,16 +83,47 @@ export interface SpeakingTaskData {
   speakTimeSeconds?: number;
 }
 
+export interface Candidate {
+  id: string; // 6-digit registration number e.g. "583921"
+  name: string;
+  dob: string; // "YYYY-MM-DD"
+  assignedTestIds: string[]; // List of test IDs assigned to this candidate
+  status?: 'active' | 'completed' | 'blocked';
+  createdAt?: string;
+}
+
+export interface CandidateTestResult {
+  id?: string;
+  candidateId: string;
+  candidateName: string;
+  candidateDob?: string;
+  testId: string;
+  testTitle?: string;
+  listeningScore: number;
+  readingScore: number;
+  writingTask1?: string;
+  writingTask2?: string;
+  writingBand?: number;
+  speakingBand?: number;
+  overallBand?: number;
+  timestamp: string;
+}
+
 export interface IELTSTest {
   id: string;
   title: string;
   module: 'academic' | 'general';
+  description?: string;
+  durationMinutes?: number;
+  assignedToAll?: boolean;
+  allowedCandidateIds?: string[];
   listeningData: ListeningSectionData[];
   listeningQuestions: Question[];
   readingPassages: ReadingPassage[];
   readingQuestions: Question[];
   writingTasks: WritingTaskData[];
   speakingTasks: SpeakingTaskData[];
+  createdAt?: string;
 }
 
 export interface HighlightItem {
