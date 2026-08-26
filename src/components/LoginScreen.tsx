@@ -75,14 +75,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onAdminLogin 
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 relative">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+    <div className="min-h-screen bg-[#f0f4f8] flex flex-col items-center justify-center p-4 relative font-sans">
+      <div className="bg-white p-10 rounded-xl shadow-lg w-full max-w-lg border-t-8 border-blue-800">
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-start text-red-600 mb-2">
-            <span className="font-extrabold text-4xl tracking-tighter" style={{ fontFamily: 'Arial, sans-serif' }}>IELTS</span>
-            <span className="text-xs mt-1 ml-0.5">TM</span>
+          <h1 className="text-4xl font-black text-blue-900 tracking-tight mb-2">JJ ACADEMY</h1>
+          <div className="flex items-center text-gray-500 mb-6 space-x-2">
+            <span className="h-px w-8 bg-gray-300"></span>
+            <span className="text-xs font-semibold uppercase tracking-widest">Computer-Delivered Testing</span>
+            <span className="h-px w-8 bg-gray-300"></span>
           </div>
-          <h2 className="text-xl font-bold text-gray-800">Test Taker Login</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Candidate Login</h2>
+          <p className="text-sm text-gray-500 mt-2 text-center">Please enter your credentials to access your assigned test.</p>
         </div>
         
         {isAdminMode ? (

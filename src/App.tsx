@@ -14,6 +14,7 @@ import { ReviewModal } from './components/ReviewModal';
 import { TestResultsModal } from './components/TestResultsModal';
 import { TestSelectorModal } from './components/TestSelectorModal';
 import { AdminDashboard } from './components/AdminDashboard';
+import { CandidateInstructions } from './components/CandidateInstructions';
 import { signInWithGoogle, db, isConfigured } from './lib/firebase';
 import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { HelpCircle, X, ShieldAlert } from 'lucide-react';
@@ -25,6 +26,7 @@ export default function App() {
   const [candidateName, setCandidateName] = useState('John Doe');
   const [candidateId, setCandidateId] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [hasConfirmedInstructions, setHasConfirmedInstructions] = useState(false);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [activeSection, setActiveSection] = useState<TestSection>('reading');
   const [activePassageId, setActivePassageId] = useState<string>('p1');
@@ -63,6 +65,18 @@ export default function App() {
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
   const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+
+  // Prevent accidental reload
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isLoggedIn && !isAdminLoggedIn && hasConfirmedInstructions && isTimerRunning) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isLoggedIn, isAdminLoggedIn, hasConfirmedInstructions, isTimerRunning]);
 
   // Sync active passage with current question
   useEffect(() => {
@@ -110,7 +124,7 @@ export default function App() {
         });
       }, 1000);
     }
-    if (!isLoggedIn && !isAdminLoggedIn) {
+  if (!isLoggedIn && !isAdminLoggedIn) {
     return (
       <LoginScreen
         onLogin={(id, name) => {
@@ -122,6 +136,16 @@ export default function App() {
           setIsAdminLoggedIn(true);
           setIsAdminDashboardOpen(true);
         }}
+      />
+    );
+  }
+
+  if (isLoggedIn && !isAdminLoggedIn && !hasConfirmedInstructions) {
+    return (
+      <CandidateInstructions
+        candidateName={candidateName}
+        candidateId={candidateId}
+        onStart={() => setHasConfirmedInstructions(true)}
       />
     );
   }
@@ -139,6 +163,7 @@ export default function App() {
 
 
   const handleFinishTest = async () => {
+    if (!window.confirm("Are you sure you want to finish the test? Your answers will be submitted.")) return;
     setIsTimerRunning(false);
     setIsResultsModalOpen(true);
     
