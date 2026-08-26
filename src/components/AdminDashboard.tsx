@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { db, storage, logout, isConfigured } from '../lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, addDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { X, LogOut, Save, Plus, Trash2, UploadCloud, Edit3, Code, FileJson, Copy, Check } from 'lucide-react';
-import { TestConfiguration, Question, ReadingPassage } from '../types';
+import { IELTSTest, Question, ReadingPassage } from '../types';
 
 interface AdminDashboardProps {
   onClose: () => void;
@@ -28,7 +28,7 @@ const SAMPLE_LISTENING_QUESTIONS: Question[] = [
     questionNumber: 2,
     instruction: 'Choose the correct letter, A, B, or C.',
     questionText: 'Which day will the venue be available?',
-    type: 'multiple-choice',
+      type: 'multiple-choice',
     options: [
       { value: 'A', label: 'A) Thursday' },
       { value: 'B', label: 'B) Friday' },
@@ -72,7 +72,12 @@ const SAMPLE_READING_QUESTIONS: Question[] = [
 ];
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
-  const [activeTab, setActiveTab] = useState<'visual' | 'json'>('visual');
+  const [activeTab, setActiveTab] = useState<'visual' | 'json' | 'users' | 'results'>('visual');
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [resultsList, setResultsList] = useState<any[]>([]);
+  const [newUserId, setNewUserId] = useState('');
+  const [newUserDob, setNewUserDob] = useState('');
+  const [newUserName, setNewUserName] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -137,6 +142,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     const list = section === 'listening' ? listeningQuestions : readingQuestions;
     const newQ: Question = {
       id: `${section.charAt(0)}${list.length + 1}_${Date.now()}`,
+      section: section,
       type: 'multiple-choice',
       questionNumber: list.length + 1,
       questionText: '',
@@ -212,7 +218,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     const newPassage: ReadingPassage = {
       id: `p${readingPassages.length + 1}_${Date.now()}`,
       title: `Reading Passage ${readingPassages.length + 1}`,
-      content: ''
+      partNumber: readingPassages.length + 1,
+      paragraphs: [{ id: 'A', text: '' }]
     };
     setReadingPassages([...readingPassages, newPassage]);
   };
@@ -227,13 +234,53 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     setReadingPassages(readingPassages.filter((_, i) => i !== index));
   };
 
-  const generateTestObject = (): TestConfiguration => {
+  
+  const fetchUsers = async () => {
+    if (!isConfigured) return;
+    try {
+      const q = await getDocs(collection(db, 'users'));
+      const users = q.docs.map(d => ({ id: d.id, ...d.data() }));
+      setUsersList(users);
+    } catch(e) {}
+  };
+
+  const fetchResults = async () => {
+    if (!isConfigured) return;
+    try {
+      const q = await getDocs(collection(db, 'results'));
+      const results = q.docs.map(d => ({ id: d.id, ...d.data() }));
+      setResultsList(results);
+    } catch(e) {}
+  };
+
+  const handleCreateUser = async () => {
+    if (!newUserId || !newUserDob) return;
+    if (!isConfigured) {
+      alert("Firebase not configured");
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'users'), {
+        id: newUserId,
+        dob: newUserDob,
+        name: newUserName || 'Student'
+      });
+      alert('User created!');
+      setNewUserId('');
+      setNewUserDob('');
+      setNewUserName('');
+      fetchUsers();
+    } catch(e: any) {
+      alert('Error creating user: ' + e.message);
+    }
+  };
+
+  const generateTestObject = (): IELTSTest => {
     return {
       id: testId,
       title,
       module,
-      listeningAudioUrl,
-      listeningAudioParts: [], // Simplified for now
+      listeningData: [{ partNumber: 1, title: 'Listening Test', audioUrl: listeningAudioUrl, audioDuration: 0, instructions: '' }],
       listeningQuestions,
       readingPassages,
       readingQuestions,
@@ -367,7 +414,83 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
         {/* Main Content Area */}
         <div className="p-6 flex-1 overflow-y-auto bg-gray-50">
           
-          {activeTab === 'visual' ? (
+          
+          {activeTab === 'users' && (
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50 flex flex-col space-y-6">
+              <div className="bg-white p-6 rounded shadow border border-gray-200">
+                <h3 className="font-bold text-lg mb-4 text-gray-800">Create New User</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Registration ID (6 Digits)</label>
+                    <input type="text" value={newUserId} onChange={e => setNewUserId(e.target.value)} maxLength={6} className="w-full p-2 border border-gray-300 rounded" placeholder="e.g. 123456" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Date of Birth (YYYY-MM-DD)</label>
+                    <input type="date" value={newUserDob} onChange={e => setNewUserDob(e.target.value)} className="w-full p-2 border border-gray-300 rounded" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Name (Optional)</label>
+                    <input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} className="w-full p-2 border border-gray-300 rounded" placeholder="John Doe" />
+                  </div>
+                </div>
+                <button onClick={handleCreateUser} className="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700">Create User</button>
+              </div>
+
+              <div className="bg-white p-6 rounded shadow border border-gray-200">
+                <h3 className="font-bold text-lg mb-4 text-gray-800">Existing Users</h3>
+                <table className="min-w-full bg-white border">
+                  <thead>
+                    <tr>
+                      <th className="py-2 px-4 border-b text-left">Registration ID</th>
+                      <th className="py-2 px-4 border-b text-left">DOB</th>
+                      <th className="py-2 px-4 border-b text-left">Name</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usersList.map((u, i) => (
+                      <tr key={i}>
+                        <td className="py-2 px-4 border-b">{u.id}</td>
+                        <td className="py-2 px-4 border-b">{u.dob}</td>
+                        <td className="py-2 px-4 border-b">{u.name}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'results' && (
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50 flex flex-col space-y-6">
+              <div className="bg-white p-6 rounded shadow border border-gray-200">
+                <h3 className="font-bold text-lg mb-4 text-gray-800">Test Results</h3>
+                <table className="min-w-full bg-white border">
+                  <thead>
+                    <tr>
+                      <th className="py-2 px-4 border-b text-left">Candidate ID</th>
+                      <th className="py-2 px-4 border-b text-left">Test ID</th>
+                      <th className="py-2 px-4 border-b text-left">Listening Score</th>
+                      <th className="py-2 px-4 border-b text-left">Reading Score</th>
+                      <th className="py-2 px-4 border-b text-left">Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resultsList.map((r, i) => (
+                      <tr key={i}>
+                        <td className="py-2 px-4 border-b">{r.candidateId}</td>
+                        <td className="py-2 px-4 border-b">{r.testId}</td>
+                        <td className="py-2 px-4 border-b">{r.listeningScore}</td>
+                        <td className="py-2 px-4 border-b">{r.readingScore}</td>
+                        <td className="py-2 px-4 border-b">{r.timestamp ? new Date(r.timestamp).toLocaleString() : 'N/A'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'visual' && (
             <div className="space-y-8 max-w-4xl mx-auto">
               {/* Test Metadata */}
               <div className="bg-white p-6 rounded shadow-sm border border-gray-200 space-y-4">
@@ -473,7 +596,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                       </div>
                       <div>
                         <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Content (Use HTML/Markdown)</label>
-                        <textarea value={p.content} onChange={(e) => updateReadingPassage(pIndex, { ...p, content: e.target.value })} className="w-full p-2 border border-gray-300 rounded text-sm bg-white font-mono" rows={6} />
+                        <textarea value={p.paragraphs?.[0]?.text || ''} onChange={(e) => updateReadingPassage(pIndex, { ...p, paragraphs: [{id: 'A', text: e.target.value}] })} className="w-full p-2 border border-gray-300 rounded text-sm bg-white font-mono" rows={6} />
                       </div>
                     </div>
                   ))}
@@ -504,7 +627,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                 </div>
               </div>
             </div>
-          ) : (
+          )}
+          {activeTab === 'json' && (
             <div className="flex flex-col h-full min-h-[400px]">
               <div className="bg-blue-50 border border-blue-200 p-4 rounded text-sm text-blue-900 mb-4 shrink-0">
                 <strong>Advanced JSON Editor</strong>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { IELTSTest, TestSection, DisplaySettings, HighlightItem, WritingEvaluation, SpeakingEvaluation } from './types';
 import { ACADEMIC_TEST_1 } from './data/mockTests';
 import { Header } from './components/Header';
+import { LoginScreen } from './components/LoginScreen';
 import { PassageViewer } from './components/PassageViewer';
 import { ListeningPlayer } from './components/ListeningPlayer';
 import { WritingEditor } from './components/WritingEditor';
@@ -14,7 +15,7 @@ import { TestResultsModal } from './components/TestResultsModal';
 import { TestSelectorModal } from './components/TestSelectorModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { signInWithGoogle, db, isConfigured } from './lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { HelpCircle, X, ShieldAlert } from 'lucide-react';
 
 export default function App() {
@@ -22,7 +23,9 @@ export default function App() {
   const [availableTests, setAvailableTests] = useState<IELTSTest[]>([ACADEMIC_TEST_1]);
   const [currentTest, setCurrentTest] = useState<IELTSTest>(ACADEMIC_TEST_1);
   const [candidateName, setCandidateName] = useState('John Doe');
-  const [candidateId, setCandidateId] = useState('JJ-883920');
+  const [candidateId, setCandidateId] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [activeSection, setActiveSection] = useState<TestSection>('reading');
   const [activePassageId, setActivePassageId] = useState<string>('p1');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -100,7 +103,7 @@ export default function App() {
         setTimeRemainingSeconds((prev) => {
           if (prev <= 1) {
             setIsTimerRunning(false);
-            setIsResultsModalOpen(true);
+            handleFinishTest();
             return 0;
           }
           return prev - 1;
@@ -117,6 +120,44 @@ export default function App() {
       : activeSection === 'reading'
       ? currentTest.readingQuestions
       : [];
+
+
+  const handleFinishTest = async () => {
+    setIsTimerRunning(false);
+    setIsResultsModalOpen(true);
+    
+    // Save to Firebase
+    if (isConfigured) {
+      try {
+        let listeningCorrect = 0;
+        currentTest.listeningQuestions.forEach(q => {
+          const uAns = (userAnswers[q.id] || '').trim().toLowerCase();
+          const cAns = q.correctAnswer.trim().toLowerCase();
+          if (uAns === cAns) listeningCorrect++;
+        });
+
+        let readingCorrect = 0;
+        currentTest.readingQuestions.forEach(q => {
+          const uAns = (userAnswers[q.id] || '').trim().toLowerCase();
+          const cAns = q.correctAnswer.trim().toLowerCase();
+          if (uAns === cAns) readingCorrect++;
+        });
+
+        await addDoc(collection(db, 'results'), {
+          candidateId: candidateId,
+          candidateName: candidateName,
+          testId: currentTest.id,
+          listeningScore: listeningCorrect,
+          readingScore: readingCorrect,
+          writingTask1: writingTask1,
+          writingTask2: writingTask2,
+          timestamp: new Date().toISOString()
+        });
+      } catch (e) {
+        console.error("Error saving result", e);
+      }
+    }
+  };
 
   // Reset question index when switching sections
   const handleSelectSection = (sec: TestSection) => {

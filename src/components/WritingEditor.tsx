@@ -188,6 +188,10 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
             value={currentText}
             onChange={(e) => onChangeText(e.target.value)}
             placeholder={`Type your Task ${activeTaskNum} essay response here... (Aim for at least ${minWords} words)`}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             className="w-full flex-1 p-4 bg-gray-50 rounded border border-gray-300 focus:ring-1 focus:ring-blue-500 focus:outline-none font-sans text-sm leading-relaxed text-gray-800 resize-none"
           />
 
