@@ -110,7 +110,23 @@ export default function App() {
         });
       }, 1000);
     }
-    return () => clearInterval(timer);
+    if (!isLoggedIn && !isAdminLoggedIn) {
+    return (
+      <LoginScreen
+        onLogin={(id, name) => {
+          setCandidateId(id);
+          setCandidateName(name);
+          setIsLoggedIn(true);
+        }}
+        onAdminLogin={() => {
+          setIsAdminLoggedIn(true);
+          setIsAdminDashboardOpen(true);
+        }}
+      />
+    );
+  }
+
+  return () => clearInterval(timer);
   }, [isTimerRunning, timeRemainingSeconds]);
 
   // Questions for active section
