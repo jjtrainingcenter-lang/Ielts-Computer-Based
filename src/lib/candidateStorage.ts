@@ -15,7 +15,13 @@ export const ACADEMIC_TEST_2: IELTSTest = {
   module: 'academic',
   description: 'Full 4-module test with Focus on Atmospheric Sciences and Marine Biology.',
   assignedToAll: false,
-  durationMinutes: 60,
+  durationMinutes: 164,
+  sectionTimers: {
+    listening: 30,
+    reading: 60,
+    writing: 60,
+    speaking: 14,
+  },
   listeningData: [
     {
       partNumber: 1,
@@ -173,7 +179,13 @@ export const GENERAL_TEST_1: IELTSTest = {
   module: 'general',
   description: 'General Training IELTS module focusing on workplace scenarios, notices, and everyday correspondence.',
   assignedToAll: true,
-  durationMinutes: 60,
+  durationMinutes: 164,
+  sectionTimers: {
+    listening: 30,
+    reading: 60,
+    writing: 60,
+    speaking: 14,
+  },
   listeningData: ACADEMIC_TEST_1.listeningData,
   listeningQuestions: ACADEMIC_TEST_1.listeningQuestions,
   readingPassages: [
@@ -478,10 +490,15 @@ export const getAssignedTestsForCandidate = async (
 
 // Save candidate test results
 export const saveTestResult = async (result: CandidateTestResult): Promise<void> => {
+  const resultWithId: CandidateTestResult = {
+    id: result.id || `res_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    ...result,
+  };
+
   try {
     const raw = localStorage.getItem(LOCAL_RESULTS_KEY);
     const results: CandidateTestResult[] = raw ? JSON.parse(raw) : [];
-    results.unshift(result);
+    results.unshift(resultWithId);
     localStorage.setItem(LOCAL_RESULTS_KEY, JSON.stringify(results));
   } catch (e) {
     console.error('Error saving local test result', e);
@@ -489,9 +506,55 @@ export const saveTestResult = async (result: CandidateTestResult): Promise<void>
 
   if (isConfigured) {
     try {
-      await addDoc(collection(db, 'results'), result);
+      await setDoc(doc(db, 'results', resultWithId.id!), resultWithId);
     } catch (e) {
       console.error('Error uploading test result to firestore', e);
+    }
+  }
+};
+
+// Update candidate test result (e.g. admin grading writing essays or adding feedback)
+export const updateTestResult = async (result: CandidateTestResult): Promise<void> => {
+  if (!result.id) return;
+  try {
+    const raw = localStorage.getItem(LOCAL_RESULTS_KEY);
+    const results: CandidateTestResult[] = raw ? JSON.parse(raw) : [];
+    const idx = results.findIndex(r => r.id === result.id || (r.candidateId === result.candidateId && r.timestamp === result.timestamp));
+    if (idx >= 0) {
+      results[idx] = { ...results[idx], ...result };
+      localStorage.setItem(LOCAL_RESULTS_KEY, JSON.stringify(results));
+    }
+  } catch (e) {
+    console.error('Error updating local test result', e);
+  }
+
+  if (isConfigured && result.id) {
+    try {
+      await setDoc(doc(db, 'results', result.id), result, { merge: true });
+    } catch (e) {
+      console.error('Error updating test result in firestore', e);
+    }
+  }
+};
+
+// Delete candidate test result
+export const deleteTestResult = async (resultId: string): Promise<void> => {
+  try {
+    const raw = localStorage.getItem(LOCAL_RESULTS_KEY);
+    if (raw) {
+      const results: CandidateTestResult[] = JSON.parse(raw);
+      const filtered = results.filter(r => r.id !== resultId);
+      localStorage.setItem(LOCAL_RESULTS_KEY, JSON.stringify(filtered));
+    }
+  } catch (e) {
+    console.error('Error deleting local test result', e);
+  }
+
+  if (isConfigured) {
+    try {
+      await deleteDoc(doc(db, 'results', resultId));
+    } catch (e) {
+      console.error('Error deleting test result from firestore', e);
     }
   }
 };
@@ -516,3 +579,39 @@ export const getAllTestResults = async (): Promise<CandidateTestResult[]> => {
 
   return localResults.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 };
+
+// Helper to resolve custom section timers for a test and candidate
+export const resolveSectionTimers = (
+  test?: IELTSTest | null,
+  candidate?: Candidate | null
+): { listening: number; reading: number; writing: number; speaking: number } => {
+  // Base default IELTS timing (mins)
+  const base = {
+    listening: test?.sectionTimers?.listening ?? 30,
+    reading: test?.sectionTimers?.reading ?? 60,
+    writing: test?.sectionTimers?.writing ?? 60,
+    speaking: test?.sectionTimers?.speaking ?? 14,
+  };
+
+  // Apply candidate multiplier if specified (e.g. 1.25 for +25% extra time)
+  const multiplier = candidate?.timeMultiplier || 1.0;
+
+  // Return resolved timers in minutes
+  return {
+    listening: candidate?.customTimers?.listening ?? Math.round(base.listening * multiplier),
+    reading: candidate?.customTimers?.reading ?? Math.round(base.reading * multiplier),
+    writing: candidate?.customTimers?.writing ?? Math.round(base.writing * multiplier),
+    speaking: candidate?.customTimers?.speaking ?? Math.round(base.speaking * multiplier),
+  };
+};
+
+// Helper to get duration in seconds for a specific section
+export const getSectionDurationSeconds = (
+  section: 'listening' | 'reading' | 'writing' | 'speaking',
+  test?: IELTSTest | null,
+  candidate?: Candidate | null
+): number => {
+  const timers = resolveSectionTimers(test, candidate);
+  return (timers[section] || 60) * 60;
+};
+

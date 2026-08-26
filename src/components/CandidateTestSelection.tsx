@@ -146,24 +146,48 @@ export const CandidateTestSelection: React.FC<CandidateTestSelectionProps> = ({
                       </p>
                     </div>
 
-                    {/* Test Modules Breakdown Pills */}
+                    {/* Test Modules Breakdown Pills with Section Timers */}
                     <div className="grid grid-cols-2 gap-2 pt-1">
-                      <div className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-100 text-xs text-slate-700">
-                        <Headphones className="w-4 h-4 text-indigo-500 shrink-0" />
-                        <span>Listening ({test.listeningQuestions.length} Qs)</span>
-                      </div>
-                      <div className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-100 text-xs text-slate-700">
-                        <BookOpen className="w-4 h-4 text-emerald-500 shrink-0" />
-                        <span>Reading ({test.readingQuestions.length} Qs)</span>
-                      </div>
-                      <div className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-100 text-xs text-slate-700">
-                        <FileEdit className="w-4 h-4 text-amber-500 shrink-0" />
-                        <span>Writing (2 Tasks)</span>
-                      </div>
-                      <div className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-100 text-xs text-slate-700">
-                        <Mic className="w-4 h-4 text-purple-500 shrink-0" />
-                        <span>Speaking (Parts 1-3)</span>
-                      </div>
+                      {(() => {
+                        const timers = {
+                          listening: candidate.customTimers?.listening ?? test.sectionTimers?.listening ?? 30,
+                          reading: candidate.customTimers?.reading ?? test.sectionTimers?.reading ?? 60,
+                          writing: candidate.customTimers?.writing ?? test.sectionTimers?.writing ?? 60,
+                          speaking: candidate.customTimers?.speaking ?? test.sectionTimers?.speaking ?? 14,
+                        };
+                        return (
+                          <>
+                            <div className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100 text-xs text-slate-700">
+                              <div className="flex items-center space-x-1.5 truncate">
+                                <Headphones className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                <span className="truncate">Listening</span>
+                              </div>
+                              <span className="font-mono font-bold text-[11px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">{timers.listening}m</span>
+                            </div>
+                            <div className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100 text-xs text-slate-700">
+                              <div className="flex items-center space-x-1.5 truncate">
+                                <BookOpen className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                <span className="truncate">Reading</span>
+                              </div>
+                              <span className="font-mono font-bold text-[11px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{timers.reading}m</span>
+                            </div>
+                            <div className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100 text-xs text-slate-700">
+                              <div className="flex items-center space-x-1.5 truncate">
+                                <FileEdit className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                <span className="truncate">Writing</span>
+                              </div>
+                              <span className="font-mono font-bold text-[11px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">{timers.writing}m</span>
+                            </div>
+                            <div className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100 text-xs text-slate-700">
+                              <div className="flex items-center space-x-1.5 truncate">
+                                <Mic className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                <span className="truncate">Speaking</span>
+                              </div>
+                              <span className="font-mono font-bold text-[11px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">{timers.speaking}m</span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 

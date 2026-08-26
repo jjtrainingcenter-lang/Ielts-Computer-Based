@@ -20,6 +20,8 @@ import {
   getAllTests,
   getAssignedTestsForCandidate,
   saveTestResult,
+  getSectionDurationSeconds,
+  resolveSectionTimers,
   SESSION_STORAGE_KEY
 } from './lib/candidateStorage';
 import { signInWithGoogle, isConfigured } from './lib/firebase';
@@ -43,6 +45,8 @@ interface StoredSession {
   timeRemainingSeconds: number;
   isTimerRunning: boolean;
   currentTestId: string;
+  currentTest?: IELTSTest;
+  assignedTests?: IELTSTest[];
   lastSavedTimestamp: number;
 }
 
@@ -67,12 +71,12 @@ export default function App() {
   const [candidateName, setCandidateName] = useState<string>(() => initialSession?.candidateName || 'John Doe');
   const [candidateId, setCandidateId] = useState<string>(() => initialSession?.candidateId || '');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => !!initialSession?.isLoggedIn);
-  const [assignedTests, setAssignedTests] = useState<IELTSTest[]>([]);
+  const [assignedTests, setAssignedTests] = useState<IELTSTest[]>(() => initialSession?.assignedTests || []);
   const [isSelectingTest, setIsSelectingTest] = useState<boolean>(() => !!initialSession?.isSelectingTest);
 
   // Test State
   const [allAvailableTests, setAllAvailableTests] = useState<IELTSTest[]>([ACADEMIC_TEST_1]);
-  const [currentTest, setCurrentTest] = useState<IELTSTest>(ACADEMIC_TEST_1);
+  const [currentTest, setCurrentTest] = useState<IELTSTest>(() => initialSession?.currentTest || ACADEMIC_TEST_1);
   const [hasConfirmedInstructions, setHasConfirmedInstructions] = useState<boolean>(() => !!initialSession?.hasConfirmedInstructions);
   const [activeSection, setActiveSection] = useState<TestSection>(() => initialSession?.activeSection || 'reading');
   const [activePassageId, setActivePassageId] = useState<string>(() => initialSession?.activePassageId || 'p1');
@@ -129,7 +133,7 @@ export default function App() {
       const tests = await getAllTests();
       setAllAvailableTests(tests);
 
-      // If initial session had a specific test ID, restore it
+      // If initial session had a specific test ID, restore it if currentTest isn't fully set
       if (initialSession?.currentTestId) {
         const found = tests.find(t => t.id === initialSession.currentTestId);
         if (found) setCurrentTest(found);
@@ -168,6 +172,8 @@ export default function App() {
         timeRemainingSeconds,
         isTimerRunning,
         currentTestId: currentTest.id,
+        currentTest,
+        assignedTests,
         lastSavedTimestamp: Date.now(),
       };
       try {
@@ -194,20 +200,77 @@ export default function App() {
     writingTask2,
     timeRemainingSeconds,
     isTimerRunning,
-    currentTest.id,
+    currentTest,
+    assignedTests
   ]);
 
-  // Warn if user attempts to leave/refresh during active test
+  // Save session immediately on beforeunload & pagehide
   useEffect(() => {
+    const saveStateBeforeExit = () => {
+      if (isLoggedIn && !isAdminLoggedIn) {
+        const sessionData: StoredSession = {
+          candidate,
+          candidateName,
+          candidateId,
+          isLoggedIn,
+          isSelectingTest,
+          hasConfirmedInstructions,
+          activeSection,
+          activePassageId,
+          currentQuestionIndex,
+          userAnswers,
+          flaggedQuestions,
+          highlights,
+          writingTask1,
+          writingTask2,
+          timeRemainingSeconds,
+          isTimerRunning,
+          currentTestId: currentTest.id,
+          currentTest,
+          assignedTests,
+          lastSavedTimestamp: Date.now(),
+        };
+        try {
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+        } catch (e) {}
+      }
+    };
+
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      saveStateBeforeExit();
       if (isLoggedIn && !isAdminLoggedIn && hasConfirmedInstructions && isTimerRunning) {
         e.preventDefault();
         e.returnValue = '';
       }
     };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isLoggedIn, isAdminLoggedIn, hasConfirmedInstructions, isTimerRunning]);
+    window.addEventListener('pagehide', saveStateBeforeExit);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', saveStateBeforeExit);
+    };
+  }, [
+    candidate,
+    isLoggedIn,
+    isAdminLoggedIn,
+    hasConfirmedInstructions,
+    isTimerRunning,
+    isSelectingTest,
+    candidateName,
+    candidateId,
+    activeSection,
+    activePassageId,
+    currentQuestionIndex,
+    userAnswers,
+    flaggedQuestions,
+    highlights,
+    writingTask1,
+    writingTask2,
+    timeRemainingSeconds,
+    currentTest,
+    assignedTests
+  ]);
 
   // Sync active passage with current question
   useEffect(() => {
@@ -282,8 +345,13 @@ export default function App() {
       testTitle: currentTest.title,
       listeningScore: listeningCorrect,
       readingScore: readingCorrect,
+      userAnswers: userAnswers,
       writingTask1: writingTask1,
       writingTask2: writingTask2,
+      writingEvaluation: writingEval || undefined,
+      speakingEvaluation: speakingEval || undefined,
+      writingBand: writingEval?.overallWritingBand,
+      speakingBand: speakingEval?.speakingBand,
       timestamp: new Date().toISOString()
     });
   };
@@ -292,6 +360,8 @@ export default function App() {
   const handleSelectSection = (sec: TestSection) => {
     setActiveSection(sec);
     setCurrentQuestionIndex(0);
+    const duration = getSectionDurationSeconds(sec, currentTest, candidate);
+    setTimeRemainingSeconds(duration);
   };
 
   // Answers & Flags
@@ -433,7 +503,8 @@ export default function App() {
     setUserAnswers({});
     setFlaggedQuestions({});
     setHighlights([]);
-    setTimeRemainingSeconds(3600);
+    const sectionDuration = getSectionDurationSeconds(initialSec, test, candidate);
+    setTimeRemainingSeconds(sectionDuration);
     setIsTimerRunning(true);
     setIsSelectorModalOpen(false);
     setIsSelectingTest(false);
@@ -505,6 +576,12 @@ export default function App() {
       <CandidateInstructions
         candidateName={candidateName}
         candidateId={candidateId}
+        testTitle={currentTest.title}
+        testModule={currentTest.module}
+        hasMultipleTests={assignedTests.length > 1}
+        onBackToSelection={() => {
+          setIsSelectingTest(true);
+        }}
         onStart={() => {
           setHasConfirmedInstructions(true);
           handleStartTest(currentTest, candidateName, candidateId);
@@ -512,6 +589,14 @@ export default function App() {
       />
     );
   }
+
+  // Resolve active timers and badge info
+  const resolvedTimers = resolveSectionTimers(currentTest, candidate);
+  const timerBadgeText = candidate?.timerPreset && candidate.timerPreset !== 'standard'
+    ? (candidate.timerPreset === 'extra25' ? '+25% Extra Time' : candidate.timerPreset === 'extra50' ? '+50% Extra Time' : candidate.timerPreset === 'rapid' ? 'Speed Drill' : 'Custom Timing')
+    : candidate?.timeMultiplier && candidate.timeMultiplier !== 1
+    ? `${(candidate.timeMultiplier * 100).toFixed(0)}% Speed`
+    : undefined;
 
   // 4. Main Inspera CBT Exam Player
   return (
@@ -527,41 +612,58 @@ export default function App() {
         onFinishTest={handleFinishTest}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenHelp={() => setIsHelpModalOpen(true)}
+        activeSection={activeSection}
+        timerBadgeText={timerBadgeText}
       />
 
-      {/* Test Title & Instructions Banner Area */}
-      <div className="bg-white pt-3 px-6 pb-2 border-b border-gray-100 flex items-center justify-between">
-        <div className="bg-[#f5f5f5] rounded-sm py-2 px-4 text-black border border-gray-200 flex-1 mr-4">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-[14px]">
-              {currentTest.title} • {activeSection.toUpperCase()} SECTION
-            </span>
-            <span className="text-[12px] text-gray-500 font-mono">
-              Reg #: {candidateId}
-            </span>
-          </div>
-          <p className="text-[13px] text-gray-600">
-            {activeSection === 'reading' && 'Read the text passage and answer the questions on the right pane.'}
-            {activeSection === 'listening' && 'Listen to the audio recording carefully and answer all questions.'}
-            {activeSection === 'writing' && 'Type your response directly into the text editor. Word count is tracked live.'}
-            {activeSection === 'speaking' && 'Follow the examiner prompts and record your verbal response.'}
-          </p>
+      {/* Test Title & Section Switcher Banner Area */}
+      <div className="bg-white pt-2.5 px-6 pb-2 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center space-x-3 overflow-x-auto pb-1 sm:pb-0">
+          {/* Section Navigation Tabs */}
+          {(['listening', 'reading', 'writing', 'speaking'] as TestSection[]).map((sec) => {
+            const isActive = activeSection === sec;
+            const secDurationMins = resolvedTimers[sec];
+            return (
+              <button
+                key={sec}
+                onClick={() => handleSelectSection(sec)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 ${
+                  isActive
+                    ? 'bg-[#214162] text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                }`}
+              >
+                <span className="capitalize">{sec}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded font-normal ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {secDurationMins}m
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        {assignedTests.length > 1 && (
-          <button
-            onClick={() => {
-              if (window.confirm("Return to available tests list? Your current progress will be preserved.")) {
-                setIsSelectingTest(true);
-                setIsTimerRunning(false);
-              }
-            }}
-            className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded border border-slate-300 shrink-0 transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Switch Test</span>
-          </button>
-        )}
+        <div className="flex items-center space-x-2 shrink-0">
+          <div className="text-right hidden sm:block">
+            <span className="text-[11px] font-mono text-slate-500">Reg: #{candidateId}</span>
+          </div>
+
+          {assignedTests.length > 1 && (
+            <button
+              onClick={() => {
+                if (window.confirm("Return to available tests list? Your current progress will be preserved.")) {
+                  setIsSelectingTest(true);
+                  setIsTimerRunning(false);
+                }
+              }}
+              className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded border border-slate-300 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Switch Test</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Workspace Area */}

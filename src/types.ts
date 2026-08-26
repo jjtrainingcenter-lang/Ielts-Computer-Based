@@ -83,11 +83,21 @@ export interface SpeakingTaskData {
   speakTimeSeconds?: number;
 }
 
+export interface IELTSSectionTimers {
+  listening: number; // minutes
+  reading: number;   // minutes
+  writing: number;   // minutes
+  speaking: number;  // minutes
+}
+
 export interface Candidate {
   id: string; // 6-digit registration number e.g. "583921"
   name: string;
   dob: string; // "YYYY-MM-DD"
   assignedTestIds: string[]; // List of test IDs assigned to this candidate
+  customTimers?: Partial<IELTSSectionTimers>; // Custom timer override per IELTS section (in minutes)
+  timerPreset?: 'standard' | 'extra25' | 'extra50' | 'rapid' | 'custom';
+  timeMultiplier?: number; // e.g. 1.0, 1.25, 1.5
   status?: 'active' | 'completed' | 'blocked';
   createdAt?: string;
 }
@@ -101,12 +111,23 @@ export interface CandidateTestResult {
   testTitle?: string;
   listeningScore: number;
   readingScore: number;
+  userAnswers?: Record<string, string>;
   writingTask1?: string;
   writingTask2?: string;
   writingBand?: number;
+  writingEvaluation?: WritingEvaluation;
   speakingBand?: number;
+  speakingEvaluation?: SpeakingEvaluation;
   overallBand?: number;
   timestamp: string;
+  examinerFeedback?: {
+    task1Band?: number;
+    task2Band?: number;
+    overallWritingBand?: number;
+    teacherNotes?: string;
+    gradedBy?: string;
+    gradedAt?: string;
+  };
 }
 
 export interface IELTSTest {
@@ -115,6 +136,7 @@ export interface IELTSTest {
   module: 'academic' | 'general';
   description?: string;
   durationMinutes?: number;
+  sectionTimers?: IELTSSectionTimers; // Custom timer per section in minutes
   assignedToAll?: boolean;
   allowedCandidateIds?: string[];
   listeningData: ListeningSectionData[];

@@ -1,10 +1,13 @@
 import React from 'react';
-import { Wifi, Bell, Clock, Settings, HelpCircle, Eye, EyeOff } from 'lucide-react';
+import { Wifi, Bell, Clock, Settings, HelpCircle, Eye, EyeOff, Headphones, BookOpen, FileEdit, Mic } from 'lucide-react';
+import { TestSection } from '../types';
 
 interface HeaderProps {
   candidateName: string;
   candidateId: string;
   timeRemainingSeconds?: number;
+  activeSection?: TestSection;
+  timerBadgeText?: string;
   showTimer?: boolean;
   onToggleTimer?: () => void;
   onAdminClick?: () => void;
@@ -17,6 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   candidateName,
   candidateId,
   timeRemainingSeconds,
+  activeSection,
+  timerBadgeText,
   showTimer = true,
   onToggleTimer,
   onAdminClick,
@@ -31,6 +36,26 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const isLowTime = typeof timeRemainingSeconds === 'number' && timeRemainingSeconds < 300; // < 5 mins
+
+  const getSectionIcon = () => {
+    switch (activeSection) {
+      case 'listening': return <Headphones className="w-3.5 h-3.5 text-indigo-600" />;
+      case 'reading': return <BookOpen className="w-3.5 h-3.5 text-emerald-600" />;
+      case 'writing': return <FileEdit className="w-3.5 h-3.5 text-amber-600" />;
+      case 'speaking': return <Mic className="w-3.5 h-3.5 text-purple-600" />;
+      default: return <Clock className="w-3.5 h-3.5 text-gray-600" />;
+    }
+  };
+
+  const getSectionLabel = () => {
+    switch (activeSection) {
+      case 'listening': return 'Listening Part';
+      case 'reading': return 'Reading Part';
+      case 'writing': return 'Writing Part';
+      case 'speaking': return 'Speaking Part';
+      default: return 'Exam Timer';
+    }
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 select-none sticky top-0 z-40">
@@ -49,26 +74,39 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Center: Real-time Countdown Timer */}
+        {/* Center: Real-time Section Countdown Timer */}
         {typeof timeRemainingSeconds === 'number' && (
-          <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 px-4 py-1.5 rounded">
-            <Clock className={`w-4 h-4 ${isLowTime ? 'text-red-600 animate-pulse' : 'text-gray-600'}`} />
-            {showTimer ? (
-              <span className={`font-mono text-base font-bold tracking-wider ${isLowTime ? 'text-red-600' : 'text-gray-900'}`}>
-                {formatTime(timeRemainingSeconds)} <span className="text-xs font-normal text-gray-500 font-sans">left</span>
+          <div className="flex items-center space-x-2.5">
+            <div className={`flex items-center space-x-2 border px-3.5 py-1.5 rounded-lg shadow-xs ${
+              isLowTime ? 'bg-red-50 border-red-300 animate-pulse' : 'bg-slate-50 border-slate-200'
+            }`}>
+              {getSectionIcon()}
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 hidden sm:inline">
+                {getSectionLabel()}:
               </span>
-            ) : (
-              <span className="text-xs text-gray-500 font-medium">Timer hidden</span>
-            )}
-            {onToggleTimer && (
-              <button
-                type="button"
-                onClick={onToggleTimer}
-                title={showTimer ? "Hide timer" : "Show timer"}
-                className="ml-1 text-gray-400 hover:text-gray-700 transition-colors p-0.5"
-              >
-                {showTimer ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
+              {showTimer ? (
+                <span className={`font-mono text-base font-bold tracking-wider ${isLowTime ? 'text-red-600' : 'text-gray-900'}`}>
+                  {formatTime(timeRemainingSeconds)} <span className="text-xs font-normal text-gray-500 font-sans">left</span>
+                </span>
+              ) : (
+                <span className="text-xs text-gray-500 font-medium">Timer hidden</span>
+              )}
+              {onToggleTimer && (
+                <button
+                  type="button"
+                  onClick={onToggleTimer}
+                  title={showTimer ? "Hide timer" : "Show timer"}
+                  className="ml-1 text-gray-400 hover:text-gray-700 transition-colors p-0.5"
+                >
+                  {showTimer ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              )}
+            </div>
+
+            {timerBadgeText && (
+              <span className="hidden md:inline-flex items-center text-[10px] font-bold px-2 py-1 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                ⏱️ {timerBadgeText}
+              </span>
             )}
           </div>
         )}
@@ -125,3 +163,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

@@ -4,6 +4,12 @@ export const ACADEMIC_TEST_1: IELTSTest = {
   id: 'jj-ielts-acad-01',
   title: 'JJ Academy Academic Practice Test 1',
   module: 'academic',
+  sectionTimers: {
+    listening: 30,
+    reading: 60,
+    writing: 60,
+    speaking: 14,
+  },
   
   // Listening Section
   listeningData: [

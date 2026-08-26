@@ -85,10 +85,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
 
   const handleAdminDirectLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPassword === 'admin123' || adminPassword === 'jjacademy') {
+    if (adminPassword === 'YahwehJireh@123') {
       onAdminLogin();
     } else {
-      setError('Invalid Admin Master Password. (Default: admin123 or sign in with Google)');
+      setError('Invalid Admin Passcode.');
     }
   };
 
@@ -167,7 +167,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
                     type="password"
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="Enter admin passcode (e.g. admin123)"
+                    placeholder="Enter Admin Passcode"
                     className="w-full pl-9 pr-3 py-2.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
