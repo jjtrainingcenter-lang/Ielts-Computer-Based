@@ -57,7 +57,7 @@ export default function App() {
 
   // Timer (60 minutes for Reading, etc)
   const [timeRemainingSeconds, setTimeRemainingSeconds] = useState<number>(3600);
-  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(true);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
   // Modals
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -124,33 +124,7 @@ export default function App() {
         });
       }, 1000);
     }
-  if (!isLoggedIn && !isAdminLoggedIn) {
-    return (
-      <LoginScreen
-        onLogin={(id, name) => {
-          setCandidateId(id);
-          setCandidateName(name);
-          setIsLoggedIn(true);
-        }}
-        onAdminLogin={() => {
-          setIsAdminLoggedIn(true);
-          setIsAdminDashboardOpen(true);
-        }}
-      />
-    );
-  }
-
-  if (isLoggedIn && !isAdminLoggedIn && !hasConfirmedInstructions) {
-    return (
-      <CandidateInstructions
-        candidateName={candidateName}
-        candidateId={candidateId}
-        onStart={() => setHasConfirmedInstructions(true)}
-      />
-    );
-  }
-
-  return () => clearInterval(timer);
+    return () => clearInterval(timer);
   }, [isTimerRunning, timeRemainingSeconds]);
 
   // Questions for active section
@@ -340,6 +314,35 @@ export default function App() {
       : settings.contrast === 'dark'
       ? 'dark bg-slate-950 text-white'
       : 'bg-white text-slate-900';
+
+  if (!isLoggedIn && !isAdminLoggedIn) {
+    return (
+      <LoginScreen
+        onLogin={(id, name) => {
+          setCandidateId(id);
+          setCandidateName(name);
+          setIsLoggedIn(true);
+        }}
+        onAdminLogin={() => {
+          setIsAdminLoggedIn(true);
+          setIsAdminDashboardOpen(true);
+        }}
+      />
+    );
+  }
+
+  if (isLoggedIn && !isAdminLoggedIn && !hasConfirmedInstructions) {
+    return (
+      <CandidateInstructions
+        candidateName={candidateName}
+        candidateId={candidateId}
+        onStart={() => {
+          setHasConfirmedInstructions(true);
+          handleStartTest(currentTest, candidateName, candidateId);
+        }}
+      />
+    );
+  }
 
   return (
     <div className={`h-screen w-screen flex flex-col font-sans ${themeClass} select-none overflow-hidden`}>
