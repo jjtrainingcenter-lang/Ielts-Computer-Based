@@ -4,8 +4,10 @@ export type QuestionType =
   | 'multiple-choice'
   | 'true-false-not-given'
   | 'yes-no-not-given'
+  | 'matching'
   | 'matching-headings'
   | 'fill-blank'
+  | 'dropdown'
   | 'table-completion'
   | 'writing-task'
   | 'speaking-task';
@@ -21,12 +23,25 @@ export interface Question {
   questionNumber: number; // 1 to 40 for Reading/Listening
   instruction?: string;
   questionText: string;
+  imageUrl?: string;
+  imageAlt?: string;
+  imageCaption?: string;
+  imagePosition?: 'top' | 'bottom' | 'left' | 'right';
+  zoomable?: boolean;
   type: QuestionType;
   options?: QuestionOption[];
   correctAnswer: string; // for auto-scoring
   explanation: string;
   passageId?: string; // linkage to passage
   partNumber?: number; // 1, 2, 3 or 4
+  groupId?: string; // for grouping questions together
+  groupInstruction?: string; // instruction for the group (e.g. Questions 21-25)
+  groupMedia?: {
+    type: 'image';
+    url: string;
+    alt?: string;
+    zoomable?: boolean;
+  };
   tableData?: {
     headers: string[];
     rows: (string | { inputId: string; placeholder: string })[][];
@@ -43,7 +58,11 @@ export interface ReadingPassage {
   partNumber: number; // Passage 1, 2, or 3
   paragraphs: {
     id: string; // 'A', 'B', 'C', etc.
-    text: string;
+    type?: 'text' | 'image' | 'heading' | 'table';
+    text?: string;
+    imageUrl?: string;
+    caption?: string;
+    alt?: string;
   }[];
 }
 
@@ -54,6 +73,10 @@ export interface ListeningSectionData {
   audioDuration: number; // in seconds
   transcript?: string;
   instructions: string;
+  // Image Support
+  imageUrl?: string;
+  imageAlt?: string;
+  imageZoomable?: boolean;
 }
 
 export interface WritingTaskData {
@@ -62,6 +85,9 @@ export interface WritingTaskData {
   prompt: string;
   minWordCount: number;
   timeLimitMinutes: number;
+  imageUrl?: string;
+  imageAlt?: string;
+  imageZoomable?: boolean;
   chartType?: 'bar' | 'line' | 'pie' | 'process' | 'letter';
   chartData?: {
     labels: string[];

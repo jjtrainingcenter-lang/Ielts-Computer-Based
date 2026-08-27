@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { WritingTaskData, DisplaySettings } from '../types';
+import { ExamImageViewer } from './ExamImageViewer';
 import {
   FileText,
   CheckCircle,
@@ -197,6 +198,17 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
           <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm leading-relaxed text-slate-800 whitespace-pre-line shadow-2xs font-sans">
             {currentTask.prompt}
           </div>
+
+          {/* Optional Task Image (Map, Graph, Diagram) */}
+          {currentTask.imageUrl && (
+            <div className="mb-4">
+              <ExamImageViewer 
+                imageUrl={currentTask.imageUrl} 
+                imageAlt={currentTask.imageAlt || `Visual Reference for Task ${activeTaskNum}`} 
+                imageZoomable={currentTask.imageZoomable !== false} 
+              />
+            </div>
+          )}
         </div>
 
         {/* Bar Chart Visualization for Task 1 (if available) */}

@@ -190,10 +190,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [writingTask1Prompt, setWritingTask1Prompt] = useState('The chart below shows information about direct carbon capture and renewable energy generation. Summarise the information by selecting and reporting the main features, and make comparisons where relevant. Write at least 150 words.');
   const [writingTask1MinWords, setWritingTask1MinWords] = useState<number>(150);
   const [writingTask1Time, setWritingTask1Time] = useState<number>(20);
+  const [writingTask1ImageUrl, setWritingTask1ImageUrl] = useState<string>('');
+  
   const [writingTask2Title, setWritingTask2Title] = useState('Academic Writing Task 2');
   const [writingTask2Prompt, setWritingTask2Prompt] = useState('Some people believe that technological progress is the primary driver of human advancement, while others argue that social equity and preservation of cultural heritage are more important. Discuss both views and give your own opinion. Write at least 250 words.');
   const [writingTask2MinWords, setWritingTask2MinWords] = useState<number>(250);
   const [writingTask2Time, setWritingTask2Time] = useState<number>(40);
+  const [writingTask2ImageUrl, setWritingTask2ImageUrl] = useState<string>('');
 
   const [jsonText, setJsonText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -219,10 +222,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     setWritingTask1Prompt('The chart below shows information about direct carbon capture and renewable energy generation. Summarise the information by selecting and reporting the main features, and make comparisons where relevant. Write at least 150 words.');
     setWritingTask1MinWords(150);
     setWritingTask1Time(20);
+    setWritingTask1ImageUrl('');
     setWritingTask2Title('Academic Writing Task 2');
     setWritingTask2Prompt('Some people believe that technological progress is the primary driver of human advancement, while others argue that social equity and preservation of cultural heritage are more important. Discuss both views and give your own opinion. Write at least 250 words.');
     setWritingTask2MinWords(250);
     setWritingTask2Time(40);
+    setWritingTask2ImageUrl('');
     setJsonText('');
     setActiveTab('visual-builder');
   };
@@ -263,22 +268,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
       setWritingTask1Prompt(t1.prompt || '');
       setWritingTask1MinWords(t1.minWordCount || 150);
       setWritingTask1Time(t1.timeLimitMinutes || 20);
+      setWritingTask1ImageUrl(t1.imageUrl || '');
     } else {
       setWritingTask1Title('Academic Writing Task 1');
       setWritingTask1Prompt('');
       setWritingTask1MinWords(150);
       setWritingTask1Time(20);
+      setWritingTask1ImageUrl('');
     }
     if (t2) {
       setWritingTask2Title(t2.title || 'Academic Writing Task 2');
       setWritingTask2Prompt(t2.prompt || '');
       setWritingTask2MinWords(t2.minWordCount || 250);
       setWritingTask2Time(t2.timeLimitMinutes || 40);
+      setWritingTask2ImageUrl(t2.imageUrl || '');
     } else {
       setWritingTask2Title('Academic Writing Task 2');
       setWritingTask2Prompt('');
       setWritingTask2MinWords(250);
       setWritingTask2Time(40);
+      setWritingTask2ImageUrl('');
     }
 
     // Set JSON text for advanced mode
@@ -620,6 +629,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
           prompt: writingTask1Prompt || 'Summarize the given chart or information. Write at least 150 words.',
           minWordCount: Number(writingTask1MinWords) || 150,
           timeLimitMinutes: Number(writingTask1Time) || 20,
+          imageUrl: writingTask1ImageUrl || undefined,
         },
         {
           taskNumber: 2,
@@ -627,6 +637,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
           prompt: writingTask2Prompt || 'Write an essay discussing the given topic. Write at least 250 words.',
           minWordCount: Number(writingTask2MinWords) || 250,
           timeLimitMinutes: Number(writingTask2Time) || 40,
+          imageUrl: writingTask2ImageUrl || undefined,
         }
       ],
       speakingTasks: [
@@ -1833,6 +1844,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                     className="w-full p-3 border border-slate-300 rounded text-xs bg-white leading-relaxed"
                     placeholder="Enter the complete Task 1 Question Prompt & Instructions..."
                   />
+
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase">Task 1 Image URL (Optional)</span>
+                    <input
+                      type="text"
+                      value={writingTask1ImageUrl}
+                      onChange={(e) => setWritingTask1ImageUrl(e.target.value)}
+                      className="flex-1 p-2 border border-slate-300 rounded text-xs bg-white"
+                      placeholder="https://example.com/chart.png"
+                    />
+                  </div>
                 </div>
 
                 {/* Writing Task 2 */}
@@ -1882,6 +1904,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                     className="w-full p-3 border border-slate-300 rounded text-xs bg-white leading-relaxed"
                     placeholder="Enter the complete Task 2 Essay Question Prompt..."
                   />
+
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase">Task 2 Image URL (Optional)</span>
+                    <input
+                      type="text"
+                      value={writingTask2ImageUrl}
+                      onChange={(e) => setWritingTask2ImageUrl(e.target.value)}
+                      className="flex-1 p-2 border border-slate-300 rounded text-xs bg-white"
+                      placeholder="https://example.com/chart.png"
+                    />
+                  </div>
                 </div>
               </div>
 

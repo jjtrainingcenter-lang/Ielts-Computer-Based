@@ -1,21 +1,28 @@
+import { ResizableSplitPane } from './components/ResizableSplitPane';
 import React, { useState, useEffect } from 'react';
 import { IELTSTest, TestSection, DisplaySettings, HighlightItem, WritingEvaluation, SpeakingEvaluation, Candidate } from './types';
 import { ACADEMIC_TEST_1 } from './data/mockTests';
-import { Header } from './components/Header';
+import { ExamHeader } from './components/ExamHeader';
 import { LoginScreen } from './components/LoginScreen';
 import { CandidateTestSelection } from './components/CandidateTestSelection';
 import { PassageViewer } from './components/PassageViewer';
+import { ExamImageViewer } from './components/ExamImageViewer';
 import { ListeningPlayer } from './components/ListeningPlayer';
 import { WritingEditor } from './components/WritingEditor';
 import { SpeakingRecorder } from './components/SpeakingRecorder';
 import { QuestionPane } from './components/QuestionPane';
-import { QuestionNav } from './components/QuestionNav';
+import { QuestionNavigator } from './components/QuestionNavigator';
+import { ExamHelpModal } from './components/ExamHelpModal';
 import { DisplaySettingsModal } from './components/DisplaySettingsModal';
 import { ReviewModal } from './components/ReviewModal';
 import { TestResultsModal } from './components/TestResultsModal';
 import { TestSelectorModal } from './components/TestSelectorModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { CandidateInstructions } from './components/CandidateInstructions';
+import { ExamDeviceCheck } from './components/ExamDeviceCheck';
+import { SectionIntro } from './components/SectionIntro';
+import { SectionTransition } from './components/SectionTransition';
+import { FinalReviewScreen } from './components/FinalReviewScreen';
 import {
   getAllTests,
   getAssignedTestsForCandidate,
@@ -34,6 +41,7 @@ interface StoredSession {
   isLoggedIn: boolean;
   isSelectingTest: boolean;
   hasConfirmedInstructions: boolean;
+  examPhase?: 'device_check' | 'section_intro' | 'active_section' | 'section_transition' | 'final_review' | 'submitted';
   activeSection: TestSection;
   activePassageId: string;
   currentQuestionIndex: number;
@@ -78,7 +86,8 @@ export default function App() {
   const [allAvailableTests, setAllAvailableTests] = useState<IELTSTest[]>([ACADEMIC_TEST_1]);
   const [currentTest, setCurrentTest] = useState<IELTSTest>(() => initialSession?.currentTest || ACADEMIC_TEST_1);
   const [hasConfirmedInstructions, setHasConfirmedInstructions] = useState<boolean>(() => !!initialSession?.hasConfirmedInstructions);
-  const [activeSection, setActiveSection] = useState<TestSection>(() => initialSession?.activeSection || 'reading');
+  const [examPhase, setExamPhase] = useState<'device_check' | 'section_intro' | 'active_section' | 'section_transition' | 'final_review' | 'submitted'>(() => initialSession?.examPhase || 'device_check');
+  const [activeSection, setActiveSection] = useState<TestSection>(() => initialSession?.activeSection || 'listening');
   const [activePassageId, setActivePassageId] = useState<string>(() => initialSession?.activePassageId || 'p1');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(() => initialSession?.currentQuestionIndex ?? 0);
 
@@ -114,6 +123,14 @@ export default function App() {
       return Math.max(0, (initialSession.timeRemainingSeconds ?? 3600) - elapsed);
     }
     return initialSession.timeRemainingSeconds ?? 3600;
+  });
+  
+  // Phase 2: Timestamp-based absolute timer engine
+  const [sectionDeadline, setSectionDeadline] = useState<number | null>(() => {
+    if (!initialSession || !initialSession.isTimerRunning) return null;
+    const elapsed = Math.max(0, Math.floor((Date.now() - initialSession.lastSavedTimestamp) / 1000));
+    const remaining = Math.max(0, (initialSession.timeRemainingSeconds ?? 3600) - elapsed);
+    return Date.now() + remaining * 1000;
   });
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(() => {
     if (!initialSession) return false;
@@ -161,6 +178,7 @@ export default function App() {
         isLoggedIn,
         isSelectingTest,
         hasConfirmedInstructions,
+        examPhase,
         activeSection,
         activePassageId,
         currentQuestionIndex,
@@ -204,7 +222,7 @@ export default function App() {
     assignedTests
   ]);
 
-  // Save session immediately on beforeunload & pagehide
+  // Autosave session whenever important state changes
   useEffect(() => {
     const saveStateBeforeExit = () => {
       if (isLoggedIn && !isAdminLoggedIn) {
@@ -215,6 +233,7 @@ export default function App() {
           isLoggedIn,
           isSelectingTest,
           hasConfirmedInstructions,
+          examPhase,
           activeSection,
           activePassageId,
           currentQuestionIndex,
@@ -236,6 +255,9 @@ export default function App() {
       }
     };
 
+    // Run autosave on state changes
+    const autosaveTimer = setTimeout(saveStateBeforeExit, 1000);
+
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       saveStateBeforeExit();
       if (isLoggedIn && !isAdminLoggedIn && hasConfirmedInstructions && isTimerRunning) {
@@ -247,6 +269,7 @@ export default function App() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('pagehide', saveStateBeforeExit);
     return () => {
+      clearTimeout(autosaveTimer);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('pagehide', saveStateBeforeExit);
     };
@@ -272,6 +295,16 @@ export default function App() {
     assignedTests
   ]);
 
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        console.warn('Candidate left the examination window.');
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   // Sync active passage with current question
   useEffect(() => {
     if (activeSection === 'reading' && currentTest.readingQuestions.length > 0) {
@@ -286,6 +319,17 @@ export default function App() {
     }
   }, [currentQuestionIndex, activeSection, currentTest]);
 
+  const handleSectionTimeExpired = () => {
+    setIsTimerRunning(false);
+    const order: TestSection[] = ['listening', 'reading', 'writing'];
+    const currentIdx = order.indexOf(activeSection);
+    if (currentIdx < order.length - 1) {
+      setExamPhase('section_transition');
+    } else {
+      setExamPhase('final_review');
+    }
+  };
+
   // Timer countdown hook
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -294,7 +338,7 @@ export default function App() {
         setTimeRemainingSeconds((prev) => {
           if (prev <= 1) {
             setIsTimerRunning(false);
-            handleFinishTest();
+            handleSectionTimeExpired();
             return 0;
           }
           return prev - 1;
@@ -313,9 +357,9 @@ export default function App() {
       : [];
 
   // Finish and submit test
-  const handleFinishTest = async () => {
-    if (!window.confirm("Are you sure you want to finish the test? Your answers will be submitted.")) return;
+  const handleSubmitTest = async () => {
     setIsTimerRunning(false);
+    setExamPhase('submitted');
     setIsResultsModalOpen(true);
     
     // Clear persisted active exam state upon completion
@@ -362,6 +406,7 @@ export default function App() {
     setCurrentQuestionIndex(0);
     const duration = getSectionDurationSeconds(sec, currentTest, candidate);
     setTimeRemainingSeconds(duration);
+    setSectionDeadline(Date.now() + duration * 1000);
   };
 
   // Answers & Flags
@@ -495,7 +540,7 @@ export default function App() {
   };
 
   // Candidate starts the active test from instructions
-  const handleStartTest = (test: IELTSTest, name: string, id: string, initialSec: TestSection = 'reading') => {
+  const handleStartTest = (test: IELTSTest, name: string, id: string, initialSec: TestSection = 'listening') => {
     setCurrentTest(test);
     setCandidateName(name);
     setCandidateId(id);
@@ -505,7 +550,9 @@ export default function App() {
     setHighlights([]);
     const sectionDuration = getSectionDurationSeconds(initialSec, test, candidate);
     setTimeRemainingSeconds(sectionDuration);
-    setIsTimerRunning(true);
+    setSectionDeadline(Date.now() + sectionDuration * 1000);
+    setExamPhase('device_check');
+    setIsTimerRunning(false);
     setIsSelectorModalOpen(false);
     setIsSelectingTest(false);
     setHasConfirmedInstructions(true);
@@ -590,6 +637,67 @@ export default function App() {
     );
   }
 
+  // 4. Exam Phases
+  if (isLoggedIn && !isAdminLoggedIn && hasConfirmedInstructions) {
+    if (examPhase === 'device_check') {
+      return <ExamDeviceCheck onContinue={() => setExamPhase('section_intro')} />;
+    }
+
+    if (examPhase === 'section_intro') {
+      return (
+        <SectionIntro
+          section={activeSection}
+          onStart={() => {
+            setExamPhase('active_section');
+            setSectionDeadline(Date.now() + timeRemainingSeconds * 1000);
+            setIsTimerRunning(true);
+          }}
+        />
+      );
+    }
+
+    if (examPhase === 'section_transition') {
+      const order: TestSection[] = ['listening', 'reading', 'writing'];
+      const currentIdx = order.indexOf(activeSection);
+      const nextSection = currentIdx < order.length - 1 ? order[currentIdx + 1] : 'submit';
+
+      return (
+        <SectionTransition
+          completedSection={activeSection}
+          nextSection={nextSection}
+          onContinue={() => {
+            if (nextSection === 'submit') {
+              setExamPhase('final_review');
+            } else {
+              handleSelectSection(nextSection);
+              setExamPhase('section_intro');
+            }
+          }}
+        />
+      );
+    }
+
+    if (examPhase === 'final_review') {
+      return (
+        <FinalReviewScreen
+          currentTest={currentTest}
+          userAnswers={userAnswers}
+          flaggedQuestions={flaggedQuestions}
+          writingTask1={writingTask1}
+          writingTask2={writingTask2}
+          onReviewSection={(section) => {
+            handleSelectSection(section);
+            setExamPhase('active_section');
+            setIsTimerRunning(true);
+          }}
+          onSubmit={() => {
+            handleSubmitTest();
+          }}
+        />
+      );
+    }
+  }
+
   // Resolve active timers and badge info
   const resolvedTimers = resolveSectionTimers(currentTest, candidate);
   const timerBadgeText = candidate?.timerPreset && candidate.timerPreset !== 'standard'
@@ -601,68 +709,52 @@ export default function App() {
   // 4. Main Inspera CBT Exam Player
   return (
     <div className={`h-screen w-screen flex flex-col font-sans ${themeClass} select-none overflow-hidden`}>
-      {/* Top Inspera Header */}
-      <Header
+      {/* Top Exam Header */}
+      <ExamHeader
         candidateName={candidateName}
         candidateId={candidateId}
-        timeRemainingSeconds={timeRemainingSeconds}
-        showTimer={settings.showTimer}
-        onToggleTimer={() => setSettings((prev) => ({ ...prev, showTimer: !prev.showTimer }))}
-        onAdminClick={handleAdminClick}
-        onFinishTest={handleFinishTest}
+        deadline={isTimerRunning ? sectionDeadline : null}
+        totalQuestions={sectionQuestions.length}
+        currentQuestionIndex={currentQuestionIndex}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
-        onOpenHelp={() => setIsHelpModalOpen(true)}
+        onOpenHelp={() => {
+          // Phase 5 requires Help NOT to pause the timer.
+          setIsHelpModalOpen(true);
+        }}
         activeSection={activeSection}
-        timerBadgeText={timerBadgeText}
+        onTimeExpired={() => {
+          setIsTimerRunning(false);
+          handleSectionTimeExpired();
+        }}
       />
 
-      {/* Test Title & Section Switcher Banner Area */}
-      <div className="bg-white pt-2.5 px-6 pb-2 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Test Title & Section Banner Area */}
+      <div className="bg-white pt-2.5 px-6 pb-2 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs relative z-10">
         <div className="flex items-center space-x-3 overflow-x-auto pb-1 sm:pb-0">
-          {/* Section Navigation Tabs */}
-          {(['listening', 'reading', 'writing', 'speaking'] as TestSection[]).map((sec) => {
-            const isActive = activeSection === sec;
-            const secDurationMins = resolvedTimers[sec];
-            return (
-              <button
-                key={sec}
-                onClick={() => handleSelectSection(sec)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 ${
-                  isActive
-                    ? 'bg-[#214162] text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-                }`}
-              >
-                <span className="capitalize">{sec}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-normal ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
-                }`}>
-                  {secDurationMins}m
-                </span>
-              </button>
-            );
-          })}
+          <div className="px-4 py-2 rounded-lg text-sm font-bold bg-[#214162] text-white shadow-xs flex items-center space-x-2 shrink-0">
+            <span className="capitalize">{activeSection} Section</span>
+          </div>
+          <span className="text-xs font-semibold text-slate-500 hidden sm:inline-block">
+            Complete the questions before time expires.
+          </span>
         </div>
 
-        <div className="flex items-center space-x-2 shrink-0">
+        <div className="flex items-center space-x-4 shrink-0">
           <div className="text-right hidden sm:block">
             <span className="text-[11px] font-mono text-slate-500">Reg: #{candidateId}</span>
           </div>
 
-          {assignedTests.length > 1 && (
-            <button
-              onClick={() => {
-                if (window.confirm("Return to available tests list? Your current progress will be preserved.")) {
-                  setIsSelectingTest(true);
-                  setIsTimerRunning(false);
-                }
-              }}
-              className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded border border-slate-300 transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Switch Test</span>
-            </button>
-          )}
+          <button
+            onClick={() => {
+              if (window.confirm("Are you sure you want to finish this section early? You cannot return to it later.")) {
+                setIsTimerRunning(false);
+                setExamPhase('section_transition');
+              }
+            }}
+            className="flex items-center space-x-1 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded shadow-sm transition-colors"
+          >
+            <span>Finish Section</span>
+          </button>
         </div>
       </div>
 
@@ -670,8 +762,8 @@ export default function App() {
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* READING SECTION (Split Pane) */}
         {activeSection === 'reading' && (
-          <div className="flex-1 flex overflow-hidden bg-white">
-            <div className="flex-1 overflow-hidden relative">
+          <ResizableSplitPane
+            leftPane={
               <PassageViewer
                 passages={currentTest.readingPassages}
                 activePassageId={activePassageId}
@@ -681,16 +773,8 @@ export default function App() {
                 onRemoveHighlight={handleRemoveHighlight}
                 settings={settings}
               />
-            </div>
-            
-            {/* Splitter */}
-            <div className="w-8 bg-white flex flex-col items-center justify-center relative shrink-0 border-x border-gray-200">
-              <div className="w-6 h-10 bg-[#f5f5f5] border border-gray-300 rounded-full flex items-center justify-center z-10 cursor-col-resize text-gray-500 shadow-sm">
-                <span className="text-sm font-bold leading-none">{'<>'}</span>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-hidden">
+            }
+            rightPane={
               <QuestionPane
                 questions={currentTest.readingQuestions}
                 currentQuestionIndex={currentQuestionIndex}
@@ -700,30 +784,45 @@ export default function App() {
                 onToggleFlag={handleToggleFlag}
                 settings={settings}
               />
-            </div>
-          </div>
+            }
+          />
         )}
 
         {/* LISTENING SECTION */}
-        {activeSection === 'listening' && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <ListeningPlayer
-              partData={currentTest.listeningData[0]}
-              masterVolume={settings.volume}
-            />
-            <div className="flex-1 overflow-hidden">
-              <QuestionPane
-                questions={currentTest.listeningQuestions}
-                currentQuestionIndex={currentQuestionIndex}
-                userAnswers={userAnswers}
-                onAnswerChange={handleAnswerChange}
-                flaggedQuestions={flaggedQuestions}
-                onToggleFlag={handleToggleFlag}
-                settings={settings}
-              />
+        {activeSection === 'listening' && (() => {
+          const activePartNum = currentTest.listeningQuestions[currentQuestionIndex]?.partNumber || 1;
+          const activeData = currentTest.listeningData.find(d => d.partNumber === activePartNum) || currentTest.listeningData[0];
+          return (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {activeData?.imageUrl && (
+                <div className="p-4 bg-slate-50 border-b border-slate-200 shrink-0 flex justify-center">
+                  <ExamImageViewer
+                    imageUrl={activeData.imageUrl}
+                    imageAlt={activeData.imageAlt}
+                    imageZoomable={activeData.imageZoomable}
+                  />
+                </div>
+              )}
+              {activeData && (
+                <ListeningPlayer
+                  partData={activeData}
+                  masterVolume={settings.volume}
+                />
+              )}
+              <div className="flex-1 overflow-hidden">
+                <QuestionPane
+                  questions={currentTest.listeningQuestions}
+                  currentQuestionIndex={currentQuestionIndex}
+                  userAnswers={userAnswers}
+                  onAnswerChange={handleAnswerChange}
+                  flaggedQuestions={flaggedQuestions}
+                  onToggleFlag={handleToggleFlag}
+                  settings={settings}
+                />
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* WRITING SECTION */}
         {activeSection === 'writing' && (
@@ -756,11 +855,13 @@ export default function App() {
 
       {/* Bottom Question Navigation Dock (for Listening & Reading) */}
       {(activeSection === 'reading' || activeSection === 'listening') && (
-        <QuestionNav
+        <QuestionNavigator
           questions={sectionQuestions}
           currentQuestionIndex={currentQuestionIndex}
-          onSelectQuestionIndex={setCurrentQuestionIndex}
+          onSelectQuestion={setCurrentQuestionIndex}
           userAnswers={userAnswers}
+          markedQuestions={flaggedQuestions}
+          onToggleMark={handleToggleFlag}
         />
       )}
 

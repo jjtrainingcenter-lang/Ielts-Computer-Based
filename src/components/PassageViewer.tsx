@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { ReadingPassage, HighlightItem, DisplaySettings } from '../types';
+import { ExamImageViewer } from './ExamImageViewer';
 import { TextHighlighterPopover } from './TextHighlighterPopover';
 
 interface PassageViewerProps {
@@ -57,9 +58,8 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
     window.getSelection()?.removeAllRanges();
   };
 
-  const handleAddNote = () => {
+  const handleAddNote = (noteContent: string) => {
     if (!selectedText) return;
-    const noteContent = prompt('Add note:', '');
     if (noteContent !== null) {
       onAddHighlight({
         passageId: currentPassage.id,
@@ -75,10 +75,83 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
 
   const fontClass =
     settings.fontSize === 'large'
-      ? 'text-lg leading-relaxed'
+      ? 'text-lg'
       : settings.fontSize === 'medium'
-      ? 'text-[16px] leading-relaxed'
-      : 'text-[15px] leading-relaxed';
+      ? 'text-[16px]'
+      : 'text-[15px]';
+
+  // Highlight rendering logic
+  const renderHighlightedText = (text: string) => {
+    if (!text) return null;
+    
+    // Filter highlights for this passage and sort by length descending to prevent shorter highlights from breaking longer ones
+    const passageHighlights = highlights
+      .filter(h => h.passageId === currentPassage.id)
+      .sort((a, b) => b.text.length - a.text.length);
+    if (passageHighlights.length === 0) return text;
+
+    let parts = [{ text, isHighlight: false, id: '', note: '' }];
+
+    passageHighlights.forEach((highlight) => {
+      const newParts: typeof parts = [];
+      parts.forEach((part) => {
+        if (part.isHighlight) {
+          newParts.push(part);
+          return;
+        }
+
+        let remainingText = part.text;
+        const searchStr = highlight.text.toLowerCase();
+        
+        while (remainingText.length > 0) {
+          const index = remainingText.toLowerCase().indexOf(searchStr);
+          if (index === -1) {
+            newParts.push({ text: remainingText, isHighlight: false, id: '', note: '' });
+            break;
+          } else {
+            if (index > 0) {
+              newParts.push({ text: remainingText.slice(0, index), isHighlight: false, id: '', note: '' });
+            }
+            newParts.push({
+              text: remainingText.slice(index, index + highlight.text.length),
+              isHighlight: true,
+              id: highlight.id,
+              note: highlight.note || ''
+            });
+            remainingText = remainingText.slice(index + highlight.text.length);
+          }
+        }
+      });
+      parts = newParts.filter(p => p.text.length > 0);
+    });
+
+    return (
+      <>
+        {parts.map((part, i) => {
+          if (part.isHighlight) {
+            return (
+              <mark
+                key={`${part.id}-${i}`}
+                className="bg-yellow-200 text-black cursor-pointer rounded-sm hover:bg-yellow-300 relative group"
+                onClick={() => {
+                  if (window.confirm(part.note ? `Note: ${part.note}\n\nClear highlight?` : 'Clear highlight?')) {
+                    onRemoveHighlight(part.id);
+                  }
+                }}
+                title={part.note || "Click to remove"}
+              >
+                {part.text}
+                {part.note && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full border border-white" />
+                )}
+              </mark>
+            );
+          }
+          return <span key={i}>{part.text}</span>;
+        })}
+      </>
+    );
+  };
 
   if (!currentPassage) return null;
 
@@ -96,11 +169,28 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
         
         {/* Paragraphs */}
         <div className="space-y-4">
-          {currentPassage.paragraphs.map((p, idx) => (
-            <p key={p.id || idx} className="text-black text-[15px] leading-relaxed text-left">
-              {p.text}
-            </p>
-          ))}
+          {currentPassage.paragraphs.map((p, idx) => {
+            if (p.type === 'image' && p.imageUrl) {
+              return (
+                <div key={p.id || idx} className="my-6 flex flex-col items-center justify-center">
+                  <ExamImageViewer imageUrl={p.imageUrl} imageAlt={p.alt || p.caption} imageZoomable={true} />
+                  {p.caption && <p className="text-sm text-slate-500 mt-2 font-medium">{p.caption}</p>}
+                </div>
+              );
+            }
+            if (p.type === 'heading') {
+              return (
+                <h4 key={p.id || idx} className="text-lg font-bold text-black mt-6 mb-2">
+                  {renderHighlightedText(p.text || '')}
+                </h4>
+              );
+            }
+            return (
+              <p key={p.id || idx} className="text-black leading-relaxed text-left">
+                {renderHighlightedText(p.text || '')}
+              </p>
+            );
+          })}
         </div>
       </div>
       
