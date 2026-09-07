@@ -354,9 +354,9 @@ export default function App() {
   // Section Questions
   const sectionQuestions =
     activeSection === 'listening'
-      ? currentTest.listeningQuestions
+      ? (currentTest.listeningQuestions || [])
       : activeSection === 'reading'
-      ? currentTest.readingQuestions
+      ? (currentTest.readingQuestions || [])
       : [];
 
   // Finish and submit test
@@ -370,7 +370,7 @@ export default function App() {
     
     // Calculate raw scores
     const checkCorrect = (q: any, userAns: string) => {
-      if (!userAns) return false;
+      if (!userAns || !q.correctAnswer) return false;
       if (q.type === 'multiple-response') {
         const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
         const cSet = q.correctAnswer.split('|').map(s => s.trim().toLowerCase()).sort();
@@ -382,12 +382,12 @@ export default function App() {
     };
 
     let listeningCorrect = 0;
-    currentTest.listeningQuestions.forEach(q => {
+    (currentTest.listeningQuestions || []).forEach(q => {
       if (checkCorrect(q, userAnswers[q.id])) listeningCorrect++;
     });
 
     let readingCorrect = 0;
-    currentTest.readingQuestions.forEach(q => {
+    (currentTest.readingQuestions || []).forEach(q => {
       if (checkCorrect(q, userAnswers[q.id])) readingCorrect++;
     });
 

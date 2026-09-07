@@ -23,20 +23,20 @@ export const FinalReviewScreen: React.FC<FinalReviewScreenProps> = ({
 }) => {
   const getListeningStats = () => {
     let answered = 0, flagged = 0;
-    currentTest.listeningQuestions.forEach(q => {
+    (currentTest.listeningQuestions || []).forEach(q => {
       if (userAnswers[q.id]?.trim()) answered++;
       if (flaggedQuestions[q.id]) flagged++;
     });
-    return { answered, total: currentTest.listeningQuestions.length, flagged };
+    return { answered, total: (currentTest.listeningQuestions || []).length, flagged };
   };
 
   const getReadingStats = () => {
     let answered = 0, flagged = 0;
-    currentTest.readingQuestions.forEach(q => {
+    (currentTest.readingQuestions || []).forEach(q => {
       if (userAnswers[q.id]?.trim()) answered++;
       if (flaggedQuestions[q.id]) flagged++;
     });
-    return { answered, total: currentTest.readingQuestions.length, flagged };
+    return { answered, total: (currentTest.readingQuestions || []).length, flagged };
   };
 
   const getWordCount = (text: string) => {

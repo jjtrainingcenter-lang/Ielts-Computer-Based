@@ -30,18 +30,27 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Helper for scoring
+  const checkCorrect = (q: any, userAns: string) => {
+    if (!userAns || !q.correctAnswer) return false;
+    if (q.type === 'multiple-response') {
+      const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
+      const cSet = q.correctAnswer.split('|').map(s => s.trim().toLowerCase()).sort();
+      return uSet.join('|') === cSet.join('|') && uSet.length > 0;
+    } else {
+      const validAnswers = q.correctAnswer.split('|').map(s => s.trim().toLowerCase());
+      return validAnswers.includes(userAns.trim().toLowerCase());
+    }
+  };
+
   // Calculate Listening Score & Band
-  const listeningScore = test.listeningQuestions.reduce((acc, q) => {
-    const uAns = (userAnswers[q.id] || '').trim().toLowerCase();
-    const cAns = q.correctAnswer.trim().toLowerCase();
-    return uAns === cAns ? acc + 1 : acc;
+  const listeningScore = (test.listeningQuestions || []).reduce((acc, q) => {
+    return checkCorrect(q, userAnswers[q.id]) ? acc + 1 : acc;
   }, 0);
 
   // Calculate Reading Score & Band
-  const readingScore = test.readingQuestions.reduce((acc, q) => {
-    const uAns = (userAnswers[q.id] || '').trim().toLowerCase();
-    const cAns = q.correctAnswer.trim().toLowerCase();
-    return uAns === cAns ? acc + 1 : acc;
+  const readingScore = (test.readingQuestions || []).reduce((acc, q) => {
+    return checkCorrect(q, userAnswers[q.id]) ? acc + 1 : acc;
   }, 0);
 
   // Score to IELTS Band Conversion Table (Academic)
@@ -59,8 +68,10 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
     return 4.5;
   };
 
-  const listeningBand = getBandFromScore(listeningScore, test.listeningQuestions.length);
-  const readingBand = getBandFromScore(readingScore, test.readingQuestions.length);
+  const listeningTotal = (test.listeningQuestions || []).length;
+  const readingTotal = (test.readingQuestions || []).length;
+  const listeningBand = getBandFromScore(listeningScore, listeningTotal || 40);
+  const readingBand = getBandFromScore(readingScore, readingTotal || 40);
   const writingBand = writingEvaluation?.overallWritingBand || 7.0;
   const speakingBand = speakingEvaluation?.speakingBand || 7.0;
 
@@ -118,8 +129,8 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
         <div className="flex items-center space-x-2 px-6 py-2 bg-gray-100 border-b border-gray-300 text-xs font-semibold overflow-x-auto">
           {[
             { id: 'summary', label: '📊 Band Score Summary' },
-            { id: 'listening', label: `🎧 Listening (${listeningScore}/${test.listeningQuestions.length})` },
-            { id: 'reading', label: `📖 Reading (${readingScore}/${test.readingQuestions.length})` },
+            { id: 'listening', label: `🎧 Listening (${listeningScore}/${listeningTotal})` },
+            { id: 'reading', label: `📖 Reading (${readingScore}/${readingTotal})` },
             { id: 'writing', label: '✍️ Writing AI Feedback' },
             { id: 'trf', label: '📜 Official Test Report Form' },
           ].map((tab) => (
@@ -209,9 +220,9 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
                 Listening Section Question Answers
               </h3>
               <div className="space-y-3">
-                {test.listeningQuestions.map((q) => {
+                {(test.listeningQuestions || []).map((q) => {
                   const uAns = userAnswers[q.id] || '(No Answer)';
-                  const isCorrect = uAns.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+                  const isCorrect = checkCorrect(q, uAns);
                   const isExp = expandedExplanation === q.id;
 
                   return (
@@ -282,9 +293,9 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
                 Reading Section Question Answers
               </h3>
               <div className="space-y-3">
-                {test.readingQuestions.map((q) => {
+                {(test.readingQuestions || []).map((q) => {
                   const uAns = userAnswers[q.id] || '(No Answer)';
-                  const isCorrect = uAns.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+                  const isCorrect = checkCorrect(q, uAns);
                   const isExp = expandedExplanation === q.id;
 
                   return (
