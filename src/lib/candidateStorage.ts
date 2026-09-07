@@ -324,12 +324,25 @@ export const getCandidates = async (): Promise<Candidate[]> => {
       const snap = await getDocs(colRef);
       if (!snap.empty) {
         const cloudCandidates = snap.docs.map(d => ({ id: d.id, ...d.data() } as Candidate));
+        
         // Merge cloud candidates with local candidates
         const mergedMap = new Map<string, Candidate>();
         localCandidates.forEach(c => mergedMap.set(c.id, c));
         cloudCandidates.forEach(c => mergedMap.set(c.id, c));
+        
         const merged = Array.from(mergedMap.values());
         localStorage.setItem(LOCAL_CANDIDATES_KEY, JSON.stringify(merged));
+        
+        // Auto-sync missing local ones to cloud
+        const cloudIds = new Set(cloudCandidates.map(c => c.id));
+        for (const cand of localCandidates) {
+          if (!cloudIds.has(cand.id)) {
+            try {
+              await setDoc(doc(db, 'candidates', cand.id), cand);
+            } catch (e) {}
+          }
+        }
+        
         return merged;
       } else {
         // Seed first batch to cloud
@@ -405,10 +418,18 @@ export const getAllTests = async (): Promise<IELTSTest[]> => {
         const cloudTests = snap.docs.map(d => d.data() as IELTSTest);
         // Merge cloud tests with custom tests
         const testMap = new Map<string, IELTSTest>();
+        
         baseTests.forEach(t => testMap.set(t.id, t));
         customTests.forEach(t => testMap.set(t.id, t));
         cloudTests.forEach(t => testMap.set(t.id, t));
-        return Array.from(testMap.values());
+        
+        const merged = Array.from(testMap.values());
+        
+        // Save merged custom tests back to local storage
+        const mergedCustom = merged.filter(t => !baseTests.some(bt => bt.id === t.id));
+        localStorage.setItem(LOCAL_CUSTOM_TESTS_KEY, JSON.stringify(mergedCustom));
+        
+        return merged;
       }
     } catch (e) {
       console.warn('Could not sync with firestore tests', e);
@@ -572,9 +593,32 @@ export const getAllTestResults = async (): Promise<CandidateTestResult[]> => {
       const snap = await getDocs(collection(db, 'results'));
       if (!snap.empty) {
         const cloud = snap.docs.map(d => ({ id: d.id, ...d.data() } as CandidateTestResult));
-        return cloud.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        
+        // Merge cloud and local
+        const resultMap = new Map<string, CandidateTestResult>();
+        localResults.forEach(r => resultMap.set(r.id!, r));
+        cloud.forEach(r => resultMap.set(r.id!, r));
+        
+        const merged = Array.from(resultMap.values());
+        merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        
+        localStorage.setItem(LOCAL_RESULTS_KEY, JSON.stringify(merged));
+
+        // Auto-sync missing local results to cloud
+        const cloudIds = new Set(cloud.map(c => c.id));
+        for (const res of localResults) {
+          if (!cloudIds.has(res.id!)) {
+            try {
+              await setDoc(doc(db, 'results', res.id!), res);
+            } catch (e) {}
+          }
+        }
+        
+        return merged;
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Error fetching cloud results', e);
+    }
   }
 
   return localResults.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
