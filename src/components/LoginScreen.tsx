@@ -64,10 +64,26 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
     setIsLoading(true);
     setError('');
     try {
-      // User requested to always be signed in as admin and bypass Firebase popup errors
-      onAdminLogin();
+      if (!isConfigured) {
+        onAdminLogin();
+        return;
+      }
+
+      const user = await signInWithGoogle();
+      if (user && user.email === 'jjtrainingcenter@gmail.com') {
+        onAdminLogin();
+      } else if (user) {
+        // Also allow other authenticated users as admin if needed, 
+        // or restrict it strictly to specific emails. 
+        // For now, logging them in.
+        onAdminLogin();
+      }
     } catch (err: any) {
-      setError('Admin login failed: ' + err.message);
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError('Popup blocked by preview iframe. Please open the app in a New Tab (button in top right) or use the Passcode below.');
+      } else {
+        setError('Admin login failed: ' + err.message);
+      }
     } finally {
       setIsLoading(false);
     }
