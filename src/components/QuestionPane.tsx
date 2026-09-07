@@ -112,60 +112,80 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                 </div>
 
                 {/* Options below text for True/False/Not Given, Multiple Choice, or Multiple Response */}
-                {(q.type === 'true-false-not-given' || q.type === 'yes-no-not-given' || q.type === 'multiple-choice' || q.type === 'multiple-response') && q.options && (
+                {(q.type === 'true-false-not-given' || q.type === 'yes-no-not-given' || q.type === 'multiple-choice' || q.type === 'multiple-response') && (
                   <div className="mt-4 space-y-3 pl-[3.25rem]">
-                    {q.options.map((opt) => {
-                      const isMulti = q.type === 'multiple-response';
-                      const currentValues = currentAnswer.split('|').filter(Boolean);
-                      const isSelected = isMulti ? currentValues.includes(opt.value) : currentAnswer === opt.value;
-                      
-                      const handleToggle = () => {
-                        if (isMulti) {
-                          if (isSelected) {
-                            onAnswerChange(q.id, currentValues.filter(v => v !== opt.value).sort().join('|'));
+                    {q.options && q.options.length > 0 ? (
+                      q.options.map((opt) => {
+                        const isMulti = q.type === 'multiple-response';
+                        const currentValues = currentAnswer.split('|').filter(Boolean);
+                        const isSelected = isMulti ? currentValues.includes(opt.value) : currentAnswer === opt.value;
+                        
+                        const handleToggle = () => {
+                          if (isMulti) {
+                            if (isSelected) {
+                              onAnswerChange(q.id, currentValues.filter(v => v !== opt.value).sort().join('|'));
+                            } else {
+                              onAnswerChange(q.id, [...currentValues, opt.value].sort().join('|'));
+                            }
                           } else {
-                            onAnswerChange(q.id, [...currentValues, opt.value].sort().join('|'));
+                            onAnswerChange(q.id, opt.value);
                           }
-                        } else {
-                          onAnswerChange(q.id, opt.value);
-                        }
-                      };
+                        };
 
-                      return (
-                        <label
-                          key={opt.value}
-                          onClick={(e) => { e.preventDefault(); handleToggle(); }}
-                          className="flex items-center cursor-pointer group"
-                        >
-                          <div className="relative flex items-center justify-center">
-                            <input
-                              type={isMulti ? "checkbox" : "radio"}
-                              name={`q-${q.id}`}
-                              checked={isSelected}
-                              onChange={() => {}}
-                              className="w-[16px] h-[16px] border-gray-400 text-black focus:ring-0 cursor-pointer accent-black"
-                            />
-                          </div>
-                          <span className="ml-3 text-[15px] text-black tracking-wide">{opt.label}</span>
-                        </label>
-                      );
-                    })}
+                        return (
+                          <label
+                            key={opt.value}
+                            onClick={(e) => { e.preventDefault(); handleToggle(); }}
+                            className="flex items-center cursor-pointer group"
+                          >
+                            <div className="relative flex items-center justify-center">
+                              <input
+                                type={isMulti ? "checkbox" : "radio"}
+                                name={`q-${q.id}`}
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="w-[16px] h-[16px] border-gray-400 text-black focus:ring-0 cursor-pointer accent-black"
+                              />
+                            </div>
+                            <span className="ml-3 text-[15px] text-black tracking-wide">{opt.label}</span>
+                          </label>
+                        );
+                      })
+                    ) : (
+                      <input
+                        type="text"
+                        value={currentAnswer}
+                        onChange={(e) => onAnswerChange(q.id, e.target.value)}
+                        placeholder="Type answer here..."
+                        className="w-full max-w-[200px] border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1.5 text-[15px] placeholder:text-black placeholder:opacity-50 placeholder:font-normal rounded-[2px] shadow-sm transition-colors"
+                      />
+                    )}
                   </div>
                 )}
 
                 {/* Dropdown / Matching */}
-                {(q.type === 'dropdown' || q.type === 'matching' || q.type === 'matching-headings') && q.options && (
+                {(q.type === 'dropdown' || q.type === 'matching' || q.type === 'matching-headings') && (
                   <div className="mt-3 pl-[3.25rem]">
-                    <select
-                      value={currentAnswer}
-                      onChange={(e) => onAnswerChange(q.id, e.target.value)}
-                      className="border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] px-3 py-1.5 text-[15px] rounded-[2px] shadow-sm"
-                    >
-                      <option value="" disabled>Select...</option>
-                      {q.options.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
+                    {q.options && q.options.length > 0 ? (
+                      <select
+                        value={currentAnswer}
+                        onChange={(e) => onAnswerChange(q.id, e.target.value)}
+                        className="border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] px-3 py-1.5 text-[15px] rounded-[2px] shadow-sm"
+                      >
+                        <option value="" disabled>Select...</option>
+                        {q.options.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={currentAnswer}
+                        onChange={(e) => onAnswerChange(q.id, e.target.value)}
+                        placeholder="Type answer here..."
+                        className="w-full max-w-[200px] border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1.5 text-[15px] placeholder:text-black placeholder:opacity-50 placeholder:font-normal rounded-[2px] shadow-sm transition-colors"
+                      />
+                    )}
                   </div>
                 )}
 
