@@ -64,18 +64,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
     setIsLoading(true);
     setError('');
     try {
-      if (!isConfigured) {
-        onAdminLogin();
-        return;
-      }
-
-      const user = await signInWithGoogle();
-      if (user && user.email === 'jjtrainingcenter@gmail.com') {
-        onAdminLogin();
-      } else if (user) {
-        // Also allow the authorized admin
-        onAdminLogin();
-      }
+      // User requested to always be signed in as admin and bypass Firebase popup errors
+      onAdminLogin();
     } catch (err: any) {
       setError('Admin login failed: ' + err.message);
     } finally {

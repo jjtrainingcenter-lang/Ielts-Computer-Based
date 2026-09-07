@@ -92,8 +92,8 @@ export default function App() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(() => initialSession?.currentQuestionIndex ?? 0);
 
   // Admin State
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(true);
+  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(true);
 
   // User Responses
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>(() => initialSession?.userAnswers || {});
@@ -717,6 +717,18 @@ export default function App() {
     ? `${(candidate.timeMultiplier * 100).toFixed(0)}% Speed`
     : undefined;
 
+  // 3.5. Admin Dashboard
+  if (isAdminLoggedIn && isAdminDashboardOpen) {
+    return (
+      <AdminDashboard
+        onClose={() => {
+          setIsAdminLoggedIn(false);
+          setIsAdminDashboardOpen(false);
+        }}
+      />
+    );
+  }
+
   // 4. Main Inspera CBT Exam Player
   return (
     <div className={`h-screen w-screen flex flex-col font-sans ${themeClass} select-none overflow-hidden`}>
@@ -877,15 +889,6 @@ export default function App() {
       )}
 
       {/* Modals */}
-      {isAdminDashboardOpen && (
-        <AdminDashboard
-          onClose={() => {
-            setIsAdminDashboardOpen(false);
-            setIsAdminLoggedIn(false);
-          }}
-        />
-      )}
-
       <DisplaySettingsModal
         isOpen={isSettingsModalOpen}
         settings={settings}
