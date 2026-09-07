@@ -36,17 +36,17 @@ export const ResizableSplitPane: React.FC<ResizableSplitPaneProps> = ({
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'col-resize';
+      document.body.style.cursor = 'ew-resize';
       document.body.style.userSelect = 'none';
     } else {
-      document.body.style.cursor = 'default';
+      document.body.style.cursor = '';
       document.body.style.userSelect = '';
     }
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'default';
+      document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
   }, [isDragging, minLeftWidthPercent, maxLeftWidthPercent]);
@@ -63,20 +63,18 @@ export const ResizableSplitPane: React.FC<ResizableSplitPaneProps> = ({
 
       {/* Draggable Splitter */}
       <div
-        className="w-4 bg-slate-50 flex flex-col items-center justify-center relative shrink-0 border-x border-slate-200 cursor-col-resize hover:bg-slate-100 transition-colors z-10"
+        className="w-3.5 bg-slate-100 flex flex-col items-center justify-center relative shrink-0 border-x border-slate-300 cursor-ew-resize hover:bg-slate-200 transition-colors z-10 select-none group"
         onMouseDown={(e) => {
           e.preventDefault();
           setIsDragging(true);
         }}
+        title="Drag to resize panes"
       >
-        <div className="w-1.5 h-12 bg-slate-300 rounded-full flex flex-col items-center justify-center space-y-1">
-          <div className="w-1 h-1 bg-slate-400 rounded-full" />
-          <div className="w-1 h-1 bg-slate-400 rounded-full" />
-          <div className="w-1 h-1 bg-slate-400 rounded-full" />
+        <div className="w-1 h-10 bg-slate-300 group-hover:bg-slate-400 rounded-full flex flex-col items-center justify-center space-y-1 transition-colors pointer-events-none">
+          <div className="w-0.5 h-0.5 bg-slate-500 rounded-full" />
+          <div className="w-0.5 h-0.5 bg-slate-500 rounded-full" />
+          <div className="w-0.5 h-0.5 bg-slate-500 rounded-full" />
         </div>
-        
-        {/* Invisible hit area expansion */}
-        <div className="absolute inset-y-0 -left-2 -right-2 z-20 cursor-col-resize" />
       </div>
 
       {/* Right Pane */}
@@ -87,9 +85,9 @@ export const ResizableSplitPane: React.FC<ResizableSplitPaneProps> = ({
         {rightPane}
       </div>
       
-      {/* Overlay to prevent iframe capturing mouse events while dragging */}
+      {/* Overlay to prevent text selection capturing mouse events while dragging */}
       {isDragging && (
-        <div className="absolute inset-0 z-50 cursor-col-resize" />
+        <div className="absolute inset-0 z-50 cursor-ew-resize select-none" />
       )}
     </div>
   );

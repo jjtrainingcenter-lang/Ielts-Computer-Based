@@ -325,7 +325,7 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
-            className={`w-full flex-1 p-4 bg-slate-50/60 hover:bg-slate-50 focus:bg-white rounded-lg border border-slate-300 focus:border-[#214162] focus:ring-1 focus:ring-[#214162] focus:outline-none font-sans ${fontSizeClass} text-slate-900 resize-none transition-all`}
+            className={`w-full flex-1 p-4 bg-slate-50/60 hover:bg-slate-50 focus:bg-white rounded-lg border border-slate-300 focus:border-[#214162] focus:ring-1 focus:ring-[#214162] focus:outline-none font-sans ${fontSizeClass} text-slate-900 resize-none transition-colors`}
           />
 
           {/* Bottom Word Progress & Text Statistics Bar */}

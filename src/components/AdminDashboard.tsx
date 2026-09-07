@@ -123,6 +123,122 @@ const SAMPLE_READING_QUESTIONS: Question[] = [
   }
 ];
 
+const ImageUploadField: React.FC<{
+  label?: string;
+  imageUrl?: string;
+  onImageChange: (url: string) => void;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>, onComplete: (url: string) => void) => void;
+}> = ({ label = "Image", imageUrl, onImageChange, onUpload }) => {
+  return (
+    <div className="space-y-1.5 border border-slate-200 p-2 rounded-lg bg-white">
+      <label className="block text-[10px] font-bold uppercase text-slate-500">{label}</label>
+      <div className="flex items-center space-x-2">
+        <label className="flex items-center space-x-1.5 bg-blue-50 text-blue-700 px-2 py-1 rounded cursor-pointer hover:bg-blue-100 transition-colors border border-blue-200">
+          <UploadCloud className="w-3.5 h-3.5" />
+          <span className="text-[10px] font-bold">Upload</span>
+          <input type="file" accept="image/*" onChange={(e) => onUpload(e, onImageChange)} className="hidden" />
+        </label>
+        <input
+          type="text"
+          value={imageUrl || ''}
+          onChange={(e) => onImageChange(e.target.value)}
+          placeholder="Or paste URL..."
+          className="flex-1 p-1 border border-slate-300 rounded text-[10px] bg-white font-mono"
+        />
+        {imageUrl && (
+          <button onClick={() => onImageChange('')} className="text-slate-400 hover:text-red-500">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {imageUrl && (
+        <div className="mt-1">
+          <img src={imageUrl} alt="Preview" className="h-12 object-contain rounded border border-slate-200" />
+        </div>
+      )}
+    </div>
+  );
+};
+
+const PassageBlockBuilder: React.FC<{
+  paragraphs: any[];
+  onChange: (paragraphs: any[]) => void;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>, onComplete: (url: string) => void) => void;
+}> = ({ paragraphs = [], onChange, onUpload }) => {
+  const addBlock = (type: 'text' | 'image' | 'heading' | 'table') => {
+    onChange([...paragraphs, { id: Date.now().toString(), type, text: '', imageUrl: '' }]);
+  };
+
+  const removeBlock = (idx: number) => {
+    const newP = [...paragraphs];
+    newP.splice(idx, 1);
+    onChange(newP);
+  };
+
+  const updateBlock = (idx: number, updates: any) => {
+    const newP = [...paragraphs];
+    newP[idx] = { ...newP[idx], ...updates };
+    onChange(newP);
+  };
+
+  return (
+    <div className="space-y-3 mt-2 border border-slate-200 rounded-lg p-3 bg-white">
+      <div className="flex items-center justify-between">
+        <h5 className="text-[11px] font-bold text-slate-600 uppercase">Passage Blocks</h5>
+        <div className="flex items-center space-x-1">
+          <button onClick={() => addBlock('heading')} className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded font-semibold text-slate-700">+ Heading</button>
+          <button onClick={() => addBlock('text')} className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded font-semibold text-slate-700">+ Paragraph</button>
+          <button onClick={() => addBlock('image')} className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded font-semibold text-slate-700">+ Image</button>
+          <button onClick={() => addBlock('table')} className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded font-semibold text-slate-700">+ Table</button>
+        </div>
+      </div>
+      {paragraphs.length === 0 && (
+        <div className="text-xs text-slate-400 italic py-2 text-center border border-dashed border-slate-300 rounded">No blocks added.</div>
+      )}
+      <div className="space-y-2">
+        {paragraphs.map((p, idx) => (
+          <div key={p.id || idx} className="flex gap-2 relative bg-slate-50 p-2 rounded border border-slate-200">
+            <div className="text-[10px] text-slate-400 font-bold uppercase w-16 shrink-0 pt-1">
+              {p.type || 'text'}
+            </div>
+            <div className="flex-1">
+              {(p.type === 'text' || p.type === 'table' || !p.type) && (
+                <textarea
+                  value={p.text || ''}
+                  onChange={(e) => updateBlock(idx, { text: e.target.value })}
+                  rows={p.type === 'text' || !p.type ? 3 : 2}
+                  className="w-full p-2 border border-slate-300 rounded text-xs font-mono bg-white"
+                  placeholder={p.type === 'table' ? "Table markdown or data..." : "Paragraph text..."}
+                />
+              )}
+              {p.type === 'heading' && (
+                <input
+                  type="text"
+                  value={p.text || ''}
+                  onChange={(e) => updateBlock(idx, { text: e.target.value })}
+                  className="w-full p-2 border border-slate-300 rounded text-xs font-bold bg-white"
+                  placeholder="Heading text..."
+                />
+              )}
+              {p.type === 'image' && (
+                <ImageUploadField
+                  label="Block Image"
+                  imageUrl={p.imageUrl}
+                  onImageChange={(url) => updateBlock(idx, { imageUrl: url })}
+                  onUpload={onUpload}
+                />
+              )}
+            </div>
+            <button onClick={() => removeBlock(idx)} className="absolute top-2 right-2 text-slate-400 hover:text-red-500">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<'candidates' | 'tests' | 'visual-builder' | 'json-builder' | 'results'>('candidates');
   
@@ -174,6 +290,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [testId, setTestId] = useState(`jj-test-${Date.now().toString().slice(-4)}`);
   const [testTitle, setTestTitle] = useState('JJ Academy Custom Mock Test');
   const [testModule, setTestModule] = useState<'academic' | 'general'>('academic');
+  const [testStatus, setTestStatus] = useState<'draft' | 'published' | 'archived'>('draft');
   const [testDescription, setTestDescription] = useState('Official simulation test created via Admin Panel.');
   const [testAssignedToAll, setTestAssignedToAll] = useState(false);
   const [testListeningTimer, setTestListeningTimer] = useState<number>(30);
@@ -208,6 +325,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     setTestId(`jj-test-${Date.now().toString().slice(-4)}`);
     setTestTitle('JJ Academy Custom Mock Test');
     setTestModule('academic');
+    setTestStatus('draft');
     setTestDescription('Official simulation test created via Admin Panel.');
     setTestAssignedToAll(false);
     setTestListeningTimer(30);
@@ -232,12 +350,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     setActiveTab('visual-builder');
   };
 
+  // Function to duplicate an existing test
+  const handleDuplicateTest = async (testToDuplicate: IELTSTest) => {
+    const newTestId = `jj-test-${Date.now().toString().slice(-4)}`;
+    const newTest: IELTSTest = {
+      ...testToDuplicate,
+      id: newTestId,
+      title: `${testToDuplicate.title} (Copy)`,
+      status: 'draft',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      await saveTest(newTest);
+      const tests = await getAllTests();
+      setAllTests(tests);
+      alert('Test duplicated successfully.');
+    } catch (err) {
+      alert('Error duplicating test');
+    }
+  };
+
   // Function to load existing test into the builder for editing
   const handleEditTest = (testToEdit: IELTSTest) => {
     setEditingTestId(testToEdit.id);
     setTestId(testToEdit.id);
     setTestTitle(testToEdit.title || '');
     setTestModule(testToEdit.module || 'academic');
+    setTestStatus(testToEdit.status || 'draft');
     setTestDescription(testToEdit.description || '');
     setTestAssignedToAll(!!testToEdit.assignedToAll);
     
@@ -507,6 +647,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     );
   };
 
+  const handleGenericImageUpload = (e: React.ChangeEvent<HTMLInputElement>, onComplete: (url: string) => void) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    if (!isConfigured || !storage) {
+      setStatus("Firebase Storage is unconfigured.");
+      return;
+    }
+    const file = e.target.files[0];
+    const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    setIsUploading(true);
+    setStatus("Uploading image...");
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      },
+      (error) => {
+        console.error("Upload failed", error);
+        setStatus(`Upload failed: ${error.message}`);
+        setIsUploading(false);
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        onComplete(downloadURL);
+        setStatus("Image uploaded successfully!");
+        setIsUploading(false);
+        setTimeout(() => setStatus(null), 3000);
+      }
+    );
+  };
+
   // Add Question
   const addQuestion = (section: 'listening' | 'reading') => {
     const list = section === 'listening' ? listeningQuestions : readingQuestions;
@@ -609,6 +783,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
       id: testId,
       title: testTitle,
       module: testModule,
+      status: testStatus,
       description: testDescription,
       assignedToAll: testAssignedToAll,
       durationMinutes: listMin + readMin + writMin + spkMin,
@@ -1349,6 +1524,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                               <Edit3 className="w-3.5 h-3.5" />
                               <span>Edit Test</span>
                             </button>
+                            <button
+                              onClick={() => handleDuplicateTest(test)}
+                              className="px-2.5 py-1 text-[11px] text-green-700 hover:text-green-900 font-bold bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors flex items-center gap-1"
+                              title="Duplicate Test"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>Duplicate</span>
+                            </button>
                             {test.id !== 'jj-ielts-acad-01' && (
                               <button
                                 onClick={() => handleDeleteTest(test.id, test.title)}
@@ -1412,7 +1595,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                     <span>Switch to Advanced JSON Mode</span>
                   </button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs font-bold uppercase text-slate-500 mb-1">
                       Test Unique ID {editingTestId && <span className="text-amber-600 font-semibold">(Read-Only)</span>}
@@ -1424,6 +1607,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                       disabled={!!editingTestId}
                       className={`w-full p-2 border border-slate-300 rounded text-xs ${editingTestId ? 'bg-slate-100 font-mono text-slate-600 cursor-not-allowed' : 'bg-white'}`}
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Status</label>
+                    <select
+                      value={testStatus}
+                      onChange={(e) => setTestStatus(e.target.value as any)}
+                      className="w-full p-2 border border-slate-300 rounded text-xs bg-white"
+                    >
+                      <option value="draft">Draft (Hidden)</option>
+                      <option value="published">Published (Visible)</option>
+                      <option value="archived">Archived</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Module</label>
@@ -1642,16 +1837,66 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                           className="col-span-2 p-1.5 border border-slate-300 rounded text-xs bg-white"
                         >
                           <option value="multiple-choice">Multiple Choice</option>
+                          <option value="multiple-response">Multiple Response</option>
                           <option value="fill-blank">Fill in the Blanks</option>
                           <option value="true-false-not-given">True / False / Not Given</option>
+                          <option value="yes-no-not-given">Yes / No / Not Given</option>
+                          <option value="matching">Matching</option>
+                          <option value="matching-headings">Matching Headings</option>
+                          <option value="dropdown">Dropdown</option>
+                          <option value="table-completion">Table Completion</option>
                         </select>
                       </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={q.groupId || ''}
+                          onChange={(e) => updateQuestion('listening', idx, { ...q, groupId: e.target.value })}
+                          className="p-1.5 border border-slate-300 rounded text-xs bg-white"
+                          placeholder="Group ID (e.g. g1)"
+                        />
+                        <input
+                          type="text"
+                          value={q.groupInstruction || ''}
+                          onChange={(e) => updateQuestion('listening', idx, { ...q, groupInstruction: e.target.value })}
+                          className="p-1.5 border border-slate-300 rounded text-xs bg-white"
+                          placeholder="Group Instruction (e.g. Questions 1-5)"
+                        />
+                      </div>
+                      <ImageUploadField
+                        label="Group Image (Optional)"
+                        imageUrl={q.groupMedia?.url || ''}
+                        onImageChange={(url) => updateQuestion('listening', idx, { ...q, groupMedia: url ? { type: 'image', url } : undefined })}
+                        onUpload={handleGenericImageUpload}
+                      />
                       <input
                         type="text"
                         value={q.questionText}
                         onChange={(e) => updateQuestion('listening', idx, { ...q, questionText: e.target.value })}
                         className="w-full p-2 border border-slate-300 rounded text-xs bg-white"
                         placeholder="Question text (use ___ for fill-in blank)"
+                      />
+                      {['multiple-choice', 'multiple-response', 'dropdown', 'matching', 'matching-headings'].includes(q.type) && (
+                        <input
+                          type="text"
+                          value={q.options?.map(o => `${o.value}:${o.label}`).join(',') || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const options = val.split(',').filter(Boolean).map(s => {
+                              const [v, l] = s.split(':');
+                              return { value: (v || '').trim(), label: (l || v || '').trim() };
+                            });
+                            updateQuestion('listening', idx, { ...q, options });
+                          }}
+                          className="w-full p-1.5 border border-slate-300 rounded text-xs bg-amber-50"
+                          placeholder="Options (e.g. A:Car,B:Bus,C:Train)"
+                        />
+                      )}
+                      <ImageUploadField
+                        label="Question Image"
+                        imageUrl={q.imageUrl}
+                        onImageChange={(url) => updateQuestion('listening', idx, { ...q, imageUrl: url })}
+                        onUpload={handleGenericImageUpload}
                       />
                       <input
                         type="text"
@@ -1686,12 +1931,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                       className="w-full p-2 border border-slate-300 rounded text-xs font-bold bg-white"
                       placeholder="Passage Title"
                     />
-                    <textarea
-                      value={p.paragraphs?.[0]?.text || ''}
-                      onChange={(e) => updateReadingPassage(idx, { ...p, paragraphs: [{ id: 'A', text: e.target.value }] })}
-                      rows={4}
-                      className="w-full p-2 border border-slate-300 rounded text-xs font-mono bg-white"
-                      placeholder="Passage Text Content..."
+                    <PassageBlockBuilder
+                      paragraphs={p.paragraphs || []}
+                      onChange={(newParagraphs) => updateReadingPassage(idx, { ...p, paragraphs: newParagraphs })}
+                      onUpload={handleGenericImageUpload}
                     />
                   </div>
                 ))}
@@ -1727,17 +1970,67 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                           onChange={(e) => updateQuestion('reading', idx, { ...q, type: e.target.value as any })}
                           className="col-span-2 p-1.5 border border-slate-300 rounded text-xs bg-white"
                         >
-                          <option value="true-false-not-given">True / False / Not Given</option>
                           <option value="multiple-choice">Multiple Choice</option>
+                          <option value="multiple-response">Multiple Response</option>
                           <option value="fill-blank">Fill in the Blanks</option>
+                          <option value="true-false-not-given">True / False / Not Given</option>
+                          <option value="yes-no-not-given">Yes / No / Not Given</option>
+                          <option value="matching">Matching</option>
+                          <option value="matching-headings">Matching Headings</option>
+                          <option value="dropdown">Dropdown</option>
+                          <option value="table-completion">Table Completion</option>
                         </select>
                       </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={q.groupId || ''}
+                          onChange={(e) => updateQuestion('reading', idx, { ...q, groupId: e.target.value })}
+                          className="p-1.5 border border-slate-300 rounded text-xs bg-white"
+                          placeholder="Group ID (e.g. g1)"
+                        />
+                        <input
+                          type="text"
+                          value={q.groupInstruction || ''}
+                          onChange={(e) => updateQuestion('reading', idx, { ...q, groupInstruction: e.target.value })}
+                          className="p-1.5 border border-slate-300 rounded text-xs bg-white"
+                          placeholder="Group Instruction (e.g. Questions 1-5)"
+                        />
+                      </div>
+                      <ImageUploadField
+                        label="Group Image (Optional)"
+                        imageUrl={q.groupMedia?.url || ''}
+                        onImageChange={(url) => updateQuestion('reading', idx, { ...q, groupMedia: url ? { type: 'image', url } : undefined })}
+                        onUpload={handleGenericImageUpload}
+                      />
                       <input
                         type="text"
                         value={q.questionText}
                         onChange={(e) => updateQuestion('reading', idx, { ...q, questionText: e.target.value })}
                         className="w-full p-2 border border-slate-300 rounded text-xs bg-white"
                         placeholder="Question text"
+                      />
+                      {['multiple-choice', 'multiple-response', 'dropdown', 'matching', 'matching-headings'].includes(q.type) && (
+                        <input
+                          type="text"
+                          value={q.options?.map(o => `${o.value}:${o.label}`).join(',') || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const options = val.split(',').filter(Boolean).map(s => {
+                              const [v, l] = s.split(':');
+                              return { value: (v || '').trim(), label: (l || v || '').trim() };
+                            });
+                            updateQuestion('reading', idx, { ...q, options });
+                          }}
+                          className="w-full p-1.5 border border-slate-300 rounded text-xs bg-amber-50"
+                          placeholder="Options (e.g. A:Car,B:Bus,C:Train)"
+                        />
+                      )}
+                      <ImageUploadField
+                        label="Question Image"
+                        imageUrl={q.imageUrl}
+                        onImageChange={(url) => updateQuestion('reading', idx, { ...q, imageUrl: url })}
+                        onUpload={handleGenericImageUpload}
                       />
                       <input
                         type="text"
@@ -1845,16 +2138,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                     placeholder="Enter the complete Task 1 Question Prompt & Instructions..."
                   />
 
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-bold text-slate-500 uppercase">Task 1 Image URL (Optional)</span>
-                    <input
-                      type="text"
-                      value={writingTask1ImageUrl}
-                      onChange={(e) => setWritingTask1ImageUrl(e.target.value)}
-                      className="flex-1 p-2 border border-slate-300 rounded text-xs bg-white"
-                      placeholder="https://example.com/chart.png"
-                    />
-                  </div>
+                  <ImageUploadField
+                    label="Task 1 Image (Optional)"
+                    imageUrl={writingTask1ImageUrl}
+                    onImageChange={setWritingTask1ImageUrl}
+                    onUpload={handleGenericImageUpload}
+                  />
                 </div>
 
                 {/* Writing Task 2 */}
@@ -1905,16 +2194,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                     placeholder="Enter the complete Task 2 Essay Question Prompt..."
                   />
 
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-bold text-slate-500 uppercase">Task 2 Image URL (Optional)</span>
-                    <input
-                      type="text"
-                      value={writingTask2ImageUrl}
-                      onChange={(e) => setWritingTask2ImageUrl(e.target.value)}
-                      className="flex-1 p-2 border border-slate-300 rounded text-xs bg-white"
-                      placeholder="https://example.com/chart.png"
-                    />
-                  </div>
+                  <ImageUploadField
+                    label="Task 2 Image (Optional)"
+                    imageUrl={writingTask2ImageUrl}
+                    onImageChange={setWritingTask2ImageUrl}
+                    onUpload={handleGenericImageUpload}
+                  />
                 </div>
               </div>
 
@@ -2550,9 +2835,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                   </div>
 
                   <div className="space-y-2">
-                    {SAMPLE_LISTENING_QUESTIONS.map((q) => {
+                    {allTests.find(t => t.id === inspectingResult.testId)?.listeningQuestions?.map((q) => {
                       const userAns = inspectingResult.userAnswers?.[q.id] || '';
-                      const isCorrect = userAns.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+                      
+                      const isMulti = q.type === 'multiple-response';
+                      let isCorrect = false;
+                      if (!userAns) {
+                        isCorrect = false;
+                      } else if (isMulti) {
+                        const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
+                        const cSet = q.correctAnswer.split('|').map(s => s.trim().toLowerCase()).sort();
+                        isCorrect = uSet.join('|') === cSet.join('|') && uSet.length > 0;
+                      } else {
+                        const validAnswers = q.correctAnswer.split('|').map(s => s.trim().toLowerCase());
+                        isCorrect = validAnswers.includes(userAns.trim().toLowerCase());
+                      }
 
                       return (
                         <div key={q.id} className="p-3.5 bg-white rounded-lg border border-slate-200 flex items-start justify-between gap-4">
@@ -2598,9 +2895,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                   </div>
 
                   <div className="space-y-2">
-                    {SAMPLE_READING_QUESTIONS.map((q) => {
+                    {allTests.find(t => t.id === inspectingResult.testId)?.readingQuestions?.map((q) => {
                       const userAns = inspectingResult.userAnswers?.[q.id] || '';
-                      const isCorrect = userAns.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+                      
+                      const isMulti = q.type === 'multiple-response';
+                      let isCorrect = false;
+                      if (!userAns) {
+                        isCorrect = false;
+                      } else if (isMulti) {
+                        const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
+                        const cSet = q.correctAnswer.split('|').map(s => s.trim().toLowerCase()).sort();
+                        isCorrect = uSet.join('|') === cSet.join('|') && uSet.length > 0;
+                      } else {
+                        const validAnswers = q.correctAnswer.split('|').map(s => s.trim().toLowerCase());
+                        isCorrect = validAnswers.includes(userAns.trim().toLowerCase());
+                      }
 
                       return (
                         <div key={q.id} className="p-3.5 bg-white rounded-lg border border-slate-200 flex items-start justify-between gap-4">

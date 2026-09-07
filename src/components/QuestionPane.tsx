@@ -96,7 +96,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                                         value={blankAnswer}
                                         onChange={(e) => onAnswerChange(blankKey, e.target.value)}
                                         placeholder={String(boxNumber)}
-                                        className="border border-[#444] text-center bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1 min-w-[130px] max-w-[190px] text-[15px] placeholder:text-black placeholder:opacity-100 placeholder:font-bold placeholder:text-center rounded-[2px] shadow-sm transition-all"
+                                        className="border border-[#444] text-center bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1 min-w-[130px] max-w-[190px] text-[15px] placeholder:text-black placeholder:opacity-100 placeholder:font-bold placeholder:text-center rounded-[2px] shadow-sm transition-colors"
                                       />
                                     </span>
                                   )}
@@ -111,20 +111,35 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                   </div>
                 </div>
 
-                {/* Options below text for True/False/Not Given or Multiple Choice */}
-                {(q.type === 'true-false-not-given' || q.type === 'yes-no-not-given' || q.type === 'multiple-choice') && q.options && (
+                {/* Options below text for True/False/Not Given, Multiple Choice, or Multiple Response */}
+                {(q.type === 'true-false-not-given' || q.type === 'yes-no-not-given' || q.type === 'multiple-choice' || q.type === 'multiple-response') && q.options && (
                   <div className="mt-4 space-y-3 pl-[3.25rem]">
                     {q.options.map((opt) => {
-                      const isSelected = currentAnswer === opt.value;
+                      const isMulti = q.type === 'multiple-response';
+                      const currentValues = currentAnswer.split('|').filter(Boolean);
+                      const isSelected = isMulti ? currentValues.includes(opt.value) : currentAnswer === opt.value;
+                      
+                      const handleToggle = () => {
+                        if (isMulti) {
+                          if (isSelected) {
+                            onAnswerChange(q.id, currentValues.filter(v => v !== opt.value).sort().join('|'));
+                          } else {
+                            onAnswerChange(q.id, [...currentValues, opt.value].sort().join('|'));
+                          }
+                        } else {
+                          onAnswerChange(q.id, opt.value);
+                        }
+                      };
+
                       return (
                         <label
                           key={opt.value}
-                          onClick={() => onAnswerChange(q.id, opt.value)}
+                          onClick={(e) => { e.preventDefault(); handleToggle(); }}
                           className="flex items-center cursor-pointer group"
                         >
                           <div className="relative flex items-center justify-center">
                             <input
-                              type="radio"
+                              type={isMulti ? "checkbox" : "radio"}
                               name={`q-${q.id}`}
                               checked={isSelected}
                               onChange={() => {}}

@@ -185,6 +185,15 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
                 </h4>
               );
             }
+            if (p.type === 'table') {
+              return (
+                <div key={p.id || idx} className="my-4 overflow-x-auto border border-slate-300 rounded">
+                  <pre className="p-4 text-sm font-mono whitespace-pre-wrap text-black bg-slate-50">
+                    {renderHighlightedText(p.text || '')}
+                  </pre>
+                </div>
+              );
+            }
             return (
               <p key={p.id || idx} className="text-black leading-relaxed text-left">
                 {renderHighlightedText(p.text || '')}

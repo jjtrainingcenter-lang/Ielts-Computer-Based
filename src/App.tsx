@@ -330,23 +330,26 @@ export default function App() {
     }
   };
 
-  // Timer countdown hook
+  // Timer countdown hook using Date.now() based deadline
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (isTimerRunning && timeRemainingSeconds > 0) {
+    if (isTimerRunning && sectionDeadline !== null) {
       timer = setInterval(() => {
-        setTimeRemainingSeconds((prev) => {
-          if (prev <= 1) {
-            setIsTimerRunning(false);
-            handleSectionTimeExpired();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+        const now = Date.now();
+        const remaining = Math.max(0, Math.floor((sectionDeadline - now) / 1000));
+        
+        setTimeRemainingSeconds(remaining);
+        
+        if (remaining <= 0) {
+          setIsTimerRunning(false);
+          setSectionDeadline(null);
+          handleSectionTimeExpired();
+          clearInterval(timer);
+        }
+      }, 500); // Check more frequently to avoid skipping zero
     }
     return () => clearInterval(timer);
-  }, [isTimerRunning, timeRemainingSeconds]);
+  }, [isTimerRunning, sectionDeadline]);
 
   // Section Questions
   const sectionQuestions =
@@ -366,18 +369,26 @@ export default function App() {
     localStorage.removeItem(SESSION_STORAGE_KEY);
     
     // Calculate raw scores
+    const checkCorrect = (q: any, userAns: string) => {
+      if (!userAns) return false;
+      if (q.type === 'multiple-response') {
+        const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
+        const cSet = q.correctAnswer.split('|').map(s => s.trim().toLowerCase()).sort();
+        return uSet.join('|') === cSet.join('|') && uSet.length > 0;
+      } else {
+        const validAnswers = q.correctAnswer.split('|').map(s => s.trim().toLowerCase());
+        return validAnswers.includes(userAns.trim().toLowerCase());
+      }
+    };
+
     let listeningCorrect = 0;
     currentTest.listeningQuestions.forEach(q => {
-      const uAns = (userAnswers[q.id] || '').trim().toLowerCase();
-      const cAns = q.correctAnswer.trim().toLowerCase();
-      if (uAns === cAns && uAns.length > 0) listeningCorrect++;
+      if (checkCorrect(q, userAnswers[q.id])) listeningCorrect++;
     });
 
     let readingCorrect = 0;
     currentTest.readingQuestions.forEach(q => {
-      const uAns = (userAnswers[q.id] || '').trim().toLowerCase();
-      const cAns = q.correctAnswer.trim().toLowerCase();
-      if (uAns === cAns && uAns.length > 0) readingCorrect++;
+      if (checkCorrect(q, userAnswers[q.id])) readingCorrect++;
     });
 
     // Save result via candidate storage helper

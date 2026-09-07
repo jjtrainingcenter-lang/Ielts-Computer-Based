@@ -26,3 +26,22 @@
   scrollbar-width: auto;
   scrollbar-color: #c1c1c1 #f1f1f1;
 }
+
+/* Global text input & textarea rules to ensure caret-color remains visible
+   and prevent layout shifts or diminishing effects near container boundaries */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input:not([type]),
+textarea {
+  caret-color: currentColor;
+  box-sizing: border-box;
+  overflow-anchor: none;
+}
+
+input:focus,
+textarea:focus {
+  caret-color: currentColor;
+}

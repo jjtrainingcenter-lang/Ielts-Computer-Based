@@ -2,6 +2,7 @@ export type TestSection = 'listening' | 'reading' | 'writing' | 'speaking';
 
 export type QuestionType =
   | 'multiple-choice'
+  | 'multiple-response'
   | 'true-false-not-given'
   | 'yes-no-not-given'
   | 'matching'
@@ -164,6 +165,7 @@ export interface IELTSTest {
   durationMinutes?: number;
   sectionTimers?: IELTSSectionTimers; // Custom timer per section in minutes
   assignedToAll?: boolean;
+  status?: 'draft' | 'published' | 'archived';
   allowedCandidateIds?: string[];
   listeningData: ListeningSectionData[];
   listeningQuestions: Question[];
@@ -172,6 +174,7 @@ export interface IELTSTest {
   writingTasks: WritingTaskData[];
   speakingTasks: SpeakingTaskData[];
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface HighlightItem {
