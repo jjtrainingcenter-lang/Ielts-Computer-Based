@@ -436,9 +436,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     // Set JSON text for advanced mode
     setJsonText(JSON.stringify(testToEdit, null, 2));
 
-    // Switch to visual builder tab
-    setActiveTab('visual-builder');
-    setStatus(`Editing test: "${testToEdit.title}" (ID: ${testToEdit.id})`);
+    // Rich imported tests must be edited in JSON Builder so no listening/speaking/media arrays are flattened.
+    setActiveTab('json-builder');
+    setStatus(`Editing full test in JSON Builder: "${testToEdit.title}" (ID: ${testToEdit.id})`);
     setTimeout(() => setStatus(null), 3000);
   };
 
@@ -822,8 +822,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
         {
           partNumber: 1,
           title: 'Speaking Part 1',
-          topic: 'General Introduction & Everyday Life',
-          questions: ['Introduce yourself.', 'Describe your studies or work.']
+          topic: 'Introduction and Interview',
+          questions: [
+            'Tell me about your home, work or studies.',
+            'What do you enjoy doing in your free time?'
+          ]
+        },
+        {
+          partNumber: 2,
+          title: 'Speaking Part 2',
+          topic: 'Individual Long Turn',
+          cueCard: {
+            mainTopic: 'Describe an experience, person, place or object that is important to you.',
+            bulletPoints: [
+              'what or who it was',
+              'when or where it happened',
+              'why it was important to you',
+              'and explain how you felt about it'
+            ]
+          },
+          questions: [],
+          prepTimeSeconds: 60,
+          speakTimeSeconds: 120
+        },
+        {
+          partNumber: 3,
+          title: 'Speaking Part 3',
+          topic: 'Two-way Discussion',
+          questions: [
+            'Why do significant experiences affect people differently?',
+            'How can society help people learn from important experiences?'
+          ]
         }
       ],
       createdAt: new Date().toISOString()
