@@ -44,15 +44,6 @@ export const ValidationReportModal: React.FC<ValidationReportModalProps> = ({ te
   const speakingT = test.speakingTasks || [];
   const listeningData = test.listeningData || [];
 
-  // Normalize legacy/import aliases into the canonical runtime type used by scoring.
-  // This happens on the same in-memory object that is published after validation,
-  // so imported multi-answer questions score correctly without changing source wording/options.
-  [...listeningQ, ...readingQ].forEach((q) => {
-    if (q.type === 'multiple-choice-multiple-answer') {
-      q.type = 'multiple-response';
-    }
-  });
-
   const issues: string[] = [];
   const warnings: string[] = [];
   const successes: string[] = [];
