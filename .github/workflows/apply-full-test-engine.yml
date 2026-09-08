@@ -1,0 +1,37 @@
+name: Apply Full Test Engine Patch
+
+on:
+  push:
+    branches:
+      - chatgpt/full-mock-test-engine
+    paths:
+      - upgrade-full-test-engine.cjs
+      - .github/workflows/apply-full-test-engine.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt/full-mock-test-engine
+          fetch-depth: 0
+
+      - name: Apply patch
+        run: node upgrade-full-test-engine.cjs
+
+      - name: Commit patched source
+        run: |
+          if git diff --quiet; then
+            echo "No source changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/AdminDashboard.tsx
+          git commit -m "fix: complete reusable full mock test engine"
+          git push origin HEAD:chatgpt/full-mock-test-engine
