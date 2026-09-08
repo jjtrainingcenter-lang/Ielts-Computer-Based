@@ -200,7 +200,17 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
           </div>
 
           {/* Optional Task Image (Map, Graph, Diagram) */}
-          {currentTask.imageUrl && (
+          {currentTask.media && currentTask.media.type === 'image' && currentTask.media.url && (
+            <div className="mb-4 flex flex-col items-center">
+              <ExamImageViewer 
+                imageUrl={currentTask.media.url} 
+                imageAlt={currentTask.media.alt || `Visual Reference for Task ${activeTaskNum}`} 
+                imageZoomable={currentTask.imageZoomable !== false} 
+              />
+              {currentTask.media.caption && <p className="text-center text-xs text-slate-500 mt-2 italic">{currentTask.media.caption}</p>}
+            </div>
+          )}
+          {!currentTask.media && currentTask.imageUrl && (
             <div className="mb-4">
               <ExamImageViewer 
                 imageUrl={currentTask.imageUrl} 

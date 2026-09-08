@@ -64,9 +64,16 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                 className="scroll-mt-32 flex flex-col"
               >
                 {/* Question Image if present directly on the question */}
-                {q.imageUrl && (
+                {q.media && q.media.type === 'image' && q.media.url && (
+                  <div className={`mb-4 flex ${q.imagePosition === 'left' ? 'justify-start' : q.imagePosition === 'right' ? 'justify-end' : 'justify-center'}`}>
+                    <ExamImageViewer imageUrl={q.media.url} imageAlt={q.media.alt || q.imageAlt} imageZoomable={q.zoomable} />
+                    {q.media.caption && <p className="text-center text-xs text-slate-500 mt-2 italic">{q.media.caption}</p>}
+                  </div>
+                )}
+                {!q.media && q.imageUrl && (
                   <div className={`mb-4 flex ${q.imagePosition === 'left' ? 'justify-start' : q.imagePosition === 'right' ? 'justify-end' : 'justify-center'}`}>
                     <ExamImageViewer imageUrl={q.imageUrl} imageAlt={q.imageAlt} imageZoomable={q.zoomable} />
+                    {q.imageCaption && <p className="text-center text-xs text-slate-500 mt-2 italic">{q.imageCaption}</p>}
                   </div>
                 )}
                 

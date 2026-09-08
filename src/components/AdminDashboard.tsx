@@ -14,6 +14,7 @@ import {
 } from '../lib/candidateStorage';
 import { Candidate, IELTSTest, Question, ReadingPassage, CandidateTestResult, IELTSSectionTimers, WritingTaskData } from '../types';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ValidationReportModal } from './ValidationReportModal';
 import {
   X, LogOut, Save, Plus, Trash2, UploadCloud, Edit3, Code, FileJson, Copy, Check,
   Users, BookOpen, Award, Sparkles, RefreshCw, CheckSquare, Square, Search, Filter, ShieldCheck, ChevronRight,
@@ -241,6 +242,8 @@ const PassageBlockBuilder: React.FC<{
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<'candidates' | 'tests' | 'visual-builder' | 'json-builder' | 'results'>('candidates');
+  const [testToValidate, setTestToValidate] = useState<IELTSTest | null>(null);
+  const [showValidationModal, setShowValidationModal] = useState(false);
   
   // Candidates State
   const [candidatesList, setCandidatesList] = useState<Candidate[]>([]);
@@ -827,12 +830,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     };
   };
 
-  const handleSaveTest = async () => {
+  const handleInitiateSave = () => {
     try {
-      const dataToSave: IELTSTest = activeTab === 'json-builder' ? JSON.parse(jsonText) : generateTestObject();
-      await saveTest(dataToSave);
-      setStatus(`Test "${dataToSave.title}" saved successfully!`);
+      let dataToSave: IELTSTest;
+      if (activeTab === 'json-builder') {
+        const parsed = JSON.parse(jsonText);
+        dataToSave = {
+          ...parsed,
+          id: parsed.id || editingTestId || `test_${Date.now()}`
+        };
+      } else {
+        dataToSave = generateTestObject();
+      }
+      setTestToValidate(dataToSave);
+      setShowValidationModal(true);
+    } catch (error: any) {
+      console.error(error);
+      setStatus(`Error parsing test: ${error.message}`);
+    }
+  };
+
+  const handleSaveTest = async (testData: IELTSTest) => {
+    try {
+      await saveTest(testData);
+      setStatus(`Test "${testData.title}" saved successfully!`);
       refreshAllData();
+      setActiveTab('tests');
       setTimeout(() => setStatus(null), 4000);
     } catch (error: any) {
       console.error(error);
@@ -2217,7 +2240,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                 )}
 
                 <button
-                  onClick={handleSaveTest}
+                  onClick={handleInitiateSave}
                   className="px-8 py-3 bg-[#214162] hover:bg-[#1a334e] text-white font-bold text-xs rounded-lg shadow-sm flex items-center space-x-2"
                 >
                   <Save className="w-4 h-4" />
@@ -2272,7 +2295,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                     </button>
                   )}
                   <button
-                    onClick={handleSaveTest}
+                    onClick={handleInitiateSave}
                     className="px-6 py-2.5 bg-[#214162] hover:bg-[#1a334e] text-white font-bold text-xs rounded-lg shadow-sm ml-auto"
                   >
                     {editingTestId ? 'Save & Update JSON Test' : 'Save JSON Test'}
@@ -3288,6 +3311,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {showValidationModal && testToValidate && (
+        <ValidationReportModal
+          test={testToValidate}
+          onClose={() => setShowValidationModal(false)}
+          onPublishAnyway={() => {
+            setShowValidationModal(false);
+            handleSaveTest(testToValidate);
+          }}
+        />
       )}
     </div>
   );

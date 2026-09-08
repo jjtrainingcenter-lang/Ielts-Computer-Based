@@ -33,12 +33,13 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
   // Helper for scoring
   const checkCorrect = (q: any, userAns: string) => {
     if (!userAns || !q.correctAnswer) return false;
+    const cAnsArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : q.correctAnswer.split('|');
     if (q.type === 'multiple-response') {
       const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
-      const cSet = q.correctAnswer.split('|').map(s => s.trim().toLowerCase()).sort();
+      const cSet = cAnsArr.map((s: string) => s.trim().toLowerCase()).sort();
       return uSet.join('|') === cSet.join('|') && uSet.length > 0;
     } else {
-      const validAnswers = q.correctAnswer.split('|').map(s => s.trim().toLowerCase());
+      const validAnswers = cAnsArr.map((s: string) => s.trim().toLowerCase());
       return validAnswers.includes(userAns.trim().toLowerCase());
     }
   };
@@ -247,7 +248,7 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
                                 </strong>
                               </span>
                               <span className="text-gray-500">
-                                Correct Answer: <strong className="text-gray-900">{q.correctAnswer}</strong>
+                                Correct Answer: <strong className="text-gray-900">{Array.isArray(q.correctAnswer) ? q.correctAnswer.join(", ") : q.correctAnswer}</strong>
                               </span>
                             </div>
                           </div>
@@ -320,7 +321,7 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
                                 </strong>
                               </span>
                               <span className="text-gray-500">
-                                Correct Answer: <strong className="text-gray-900">{q.correctAnswer}</strong>
+                                Correct Answer: <strong className="text-gray-900">{Array.isArray(q.correctAnswer) ? q.correctAnswer.join(", ") : q.correctAnswer}</strong>
                               </span>
                             </div>
                           </div>

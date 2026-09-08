@@ -371,12 +371,13 @@ export default function App() {
     // Calculate raw scores
     const checkCorrect = (q: any, userAns: string) => {
       if (!userAns || !q.correctAnswer) return false;
+      const cAnsArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : q.correctAnswer.split('|');
       if (q.type === 'multiple-response') {
         const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
-        const cSet = q.correctAnswer.split('|').map(s => s.trim().toLowerCase()).sort();
+        const cSet = cAnsArr.map((s: string) => s.trim().toLowerCase()).sort();
         return uSet.join('|') === cSet.join('|') && uSet.length > 0;
       } else {
-        const validAnswers = q.correctAnswer.split('|').map(s => s.trim().toLowerCase());
+        const validAnswers = cAnsArr.map((s: string) => s.trim().toLowerCase());
         return validAnswers.includes(userAns.trim().toLowerCase());
       }
     };
@@ -803,6 +804,12 @@ export default function App() {
         {activeSection === 'listening' && (() => {
           const activePartNum = currentTest.listeningQuestions[currentQuestionIndex]?.partNumber || 1;
           const activeData = currentTest.listeningData.find(d => d.partNumber === activePartNum) || currentTest.listeningData[0];
+          
+          // Determine which audio track to use to prevent accidental reset
+          const firstAudioData = currentTest.listeningData.find(d => d.audioUrl) || activeData;
+          const hasMultipleAudio = currentTest.listeningData.filter(d => d.audioUrl).length > 1;
+          const audioDataForPlayer = hasMultipleAudio ? activeData : firstAudioData;
+
           return (
             <div className="flex-1 flex flex-col overflow-hidden">
               {activeData?.imageUrl && (
@@ -814,9 +821,9 @@ export default function App() {
                   />
                 </div>
               )}
-              {activeData && (
+              {audioDataForPlayer && (
                 <ListeningPlayer
-                  partData={activeData}
+                  partData={audioDataForPlayer}
                   masterVolume={settings.volume}
                 />
               )}

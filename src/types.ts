@@ -2,16 +2,30 @@ export type TestSection = 'listening' | 'reading' | 'writing' | 'speaking';
 
 export type QuestionType =
   | 'multiple-choice'
+  | 'multiple-choice-single-answer'
+  | 'multiple-choice-multiple-answer'
   | 'multiple-response'
   | 'true-false-not-given'
   | 'yes-no-not-given'
   | 'matching'
+  | 'matching-information'
+  | 'matching-features'
+  | 'matching-sentence-endings'
   | 'matching-headings'
+  | 'paragraph-matching'
   | 'fill-blank'
-  | 'dropdown'
+  | 'sentence-completion'
+  | 'note-completion'
+  | 'form-completion'
   | 'table-completion'
+  | 'flow-chart-completion'
+  | 'diagram-labeling'
+  | 'map-labeling'
+  | 'short-answer'
+  | 'dropdown'
   | 'writing-task'
-  | 'speaking-task';
+  | 'speaking-task'
+  | string; // Fallback for unknown future types
 
 export interface QuestionOption {
   value: string;
@@ -31,7 +45,7 @@ export interface Question {
   zoomable?: boolean;
   type: QuestionType;
   options?: QuestionOption[];
-  correctAnswer: string; // for auto-scoring
+  correctAnswer: string | string[]; // for auto-scoring, can be array for multiple answers
   explanation: string;
   passageId?: string; // linkage to passage
   partNumber?: number; // 1, 2, 3 or 4
@@ -42,6 +56,12 @@ export interface Question {
     url: string;
     alt?: string;
     zoomable?: boolean;
+  };
+  media?: {
+    type: 'image';
+    url: string;
+    alt?: string;
+    caption?: string;
   };
   tableData?: {
     headers: string[];
@@ -89,6 +109,12 @@ export interface WritingTaskData {
   imageUrl?: string;
   imageAlt?: string;
   imageZoomable?: boolean;
+  media?: {
+    type: 'image';
+    url: string;
+    alt?: string;
+    caption?: string;
+  };
   chartType?: 'bar' | 'line' | 'pie' | 'process' | 'letter';
   chartData?: {
     labels: string[];
