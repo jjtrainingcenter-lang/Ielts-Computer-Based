@@ -12,6 +12,43 @@ interface QuestionPaneProps {
   settings: DisplaySettings;
 }
 
+const SINGLE_CHOICE_TYPES = new Set([
+  'multiple-choice',
+  'multiple-choice-single-answer',
+  'true-false-not-given',
+  'yes-no-not-given',
+]);
+
+const MULTI_CHOICE_TYPES = new Set([
+  'multiple-response',
+  'multiple-choice-multiple-answer',
+]);
+
+const MATCHING_TYPES = new Set([
+  'dropdown',
+  'matching',
+  'matching-information',
+  'matching-features',
+  'matching-sentence-endings',
+  'matching-headings',
+  'paragraph-matching',
+]);
+
+const COMPLETION_TYPES = new Set([
+  'fill-blank',
+  'sentence-completion',
+  'note-completion',
+  'form-completion',
+  'summary-completion',
+  'table-completion',
+  'flow-chart-completion',
+  'diagram-labeling',
+  'map-labeling',
+  'short-answer',
+]);
+
+const hasInlineBlank = (text: string) => /___|\[BLANK\]|_{3,}/.test(text || '');
+
 export const QuestionPane: React.FC<QuestionPaneProps> = ({
   questions,
   currentQuestionIndex,
@@ -38,165 +75,175 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
       ? 'text-base leading-relaxed'
       : 'text-[15px] leading-relaxed';
 
+  const textInputClass =
+    'w-full max-w-[240px] border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1.5 text-[15px] placeholder:text-black placeholder:opacity-50 placeholder:font-normal rounded-[2px] shadow-sm transition-all';
+
+  const renderInlineCompletion = (q: Question) => {
+    const parts = (q.questionText || '').split(/___|\[BLANK\]|_{3,}/g);
+    return (
+      <span className="leading-loose inline-flex items-center flex-wrap gap-y-2">
+        {parts.map((part, i) => {
+          const blankKey = i === 0 ? q.id : `${q.id}_blank_${i}`;
+          const blankAnswer = userAnswers[blankKey] || '';
+          const boxNumber = q.questionNumber + i;
+          return (
+            <React.Fragment key={`${q.id}-${i}`}>
+              <span>{part}</span>
+              {i < parts.length - 1 && (
+                <span className="inline-block relative mx-2 align-middle">
+                  <input
+                    type="text"
+                    value={blankAnswer}
+                    onChange={(e) => onAnswerChange(blankKey, e.target.value)}
+                    placeholder={String(boxNumber)}
+                    className="border border-[#444] text-center bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1 min-w-[130px] max-w-[210px] text-[15px] placeholder:text-black placeholder:opacity-100 placeholder:font-bold placeholder:text-center rounded-[2px] shadow-sm transition-colors"
+                  />
+                </span>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </span>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">
-      {/* Question Content Area */}
       <div ref={containerRef} className="p-8 flex flex-col gap-10 overflow-y-auto flex-1 ielts-scroll">
         {questions.map((q, index) => {
           const currentAnswer = userAnswers[q.id] || '';
           const prevQ = index > 0 ? questions[index - 1] : null;
-          const isNewGroup = q.groupId && q.groupId !== prevQ?.groupId;
-          
+          const isNewGroup = !!q.groupId && q.groupId !== prevQ?.groupId;
+          const isNewInstruction = !!q.instruction && q.instruction !== prevQ?.instruction && !q.groupInstruction;
+          const isSingleChoice = SINGLE_CHOICE_TYPES.has(q.type);
+          const isMultiChoice = MULTI_CHOICE_TYPES.has(q.type);
+          const isMatching = MATCHING_TYPES.has(q.type);
+          const isCompletion = COMPLETION_TYPES.has(q.type);
+          const hasOptions = !!q.options?.length;
+          const shouldUseSelect = (isMatching || q.type === 'map-labeling' || q.type === 'diagram-labeling' || q.type === 'summary-completion') && hasOptions;
+          const shouldUseTextInput = isCompletion && !shouldUseSelect && !(q.type === 'table-completion' && q.tableData) && !hasInlineBlank(q.questionText);
+
           return (
             <React.Fragment key={q.id}>
               {isNewGroup && (
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                  {q.groupInstruction && <p className="font-bold text-slate-800 mb-4 whitespace-pre-wrap">{q.groupInstruction}</p>}
-                  {q.groupMedia && q.groupMedia.type === 'image' && (
-                    <div className="mb-4 flex justify-center">
-                      <ExamImageViewer imageUrl={q.groupMedia.url} imageAlt={q.groupMedia.alt} imageZoomable={q.groupMedia.zoomable} />
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-4">
+                  {q.groupInstruction && (
+                    <p className="font-bold text-slate-800 whitespace-pre-wrap">{q.groupInstruction}</p>
+                  )}
+                  {q.groupMedia?.type === 'image' && q.groupMedia.url && (
+                    <div className="flex justify-center">
+                      <ExamImageViewer
+                        imageUrl={q.groupMedia.url}
+                        imageAlt={q.groupMedia.alt}
+                        imageZoomable={q.groupMedia.zoomable}
+                      />
                     </div>
                   )}
                 </div>
               )}
+
+              {isNewInstruction && (
+                <div className="text-sm font-semibold text-slate-800 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 whitespace-pre-wrap">
+                  {q.instruction}
+                </div>
+              )}
+
               <div
                 ref={(el) => (questionRefs.current[index] = el)}
                 className="scroll-mt-32 flex flex-col"
               >
-                {/* Question Image if present directly on the question */}
-                {q.media && q.media.type === 'image' && q.media.url && (
-                  <div className={`mb-4 flex ${q.imagePosition === 'left' ? 'justify-start' : q.imagePosition === 'right' ? 'justify-end' : 'justify-center'}`}>
-                    <ExamImageViewer imageUrl={q.media.url} imageAlt={q.media.alt || q.imageAlt} imageZoomable={q.zoomable} />
+                {q.media?.type === 'image' && q.media.url && (
+                  <div className={`mb-4 flex flex-col ${q.imagePosition === 'left' ? 'items-start' : q.imagePosition === 'right' ? 'items-end' : 'items-center'}`}>
+                    <ExamImageViewer
+                      imageUrl={q.media.url}
+                      imageAlt={q.media.alt || q.imageAlt}
+                      imageZoomable={q.zoomable}
+                    />
                     {q.media.caption && <p className="text-center text-xs text-slate-500 mt-2 italic">{q.media.caption}</p>}
                   </div>
                 )}
+
                 {!q.media && q.imageUrl && (
-                  <div className={`mb-4 flex ${q.imagePosition === 'left' ? 'justify-start' : q.imagePosition === 'right' ? 'justify-end' : 'justify-center'}`}>
-                    <ExamImageViewer imageUrl={q.imageUrl} imageAlt={q.imageAlt} imageZoomable={q.zoomable} />
+                  <div className={`mb-4 flex flex-col ${q.imagePosition === 'left' ? 'items-start' : q.imagePosition === 'right' ? 'items-end' : 'items-center'}`}>
+                    <ExamImageViewer
+                      imageUrl={q.imageUrl}
+                      imageAlt={q.imageAlt}
+                      imageZoomable={q.zoomable}
+                    />
                     {q.imageCaption && <p className="text-center text-xs text-slate-500 mt-2 italic">{q.imageCaption}</p>}
                   </div>
                 )}
-                
+
                 <div className="flex items-start">
                   <span className="w-8 h-8 border border-[#00529b] text-[#00529b] text-[15px] flex items-center justify-center shrink-0 mr-3 mt-0.5 rounded-sm shadow-[2px_0_0_#00529b]">
                     {q.questionNumber}
                   </span>
-                  
                   <div className={`text-black pt-1 flex-1 ${fontClass}`}>
-                    {(() => {
-                      if (q.type === 'fill-blank' && (q.questionText.includes('___') || q.questionText.includes('[BLANK]'))) {
-                        const parts = q.questionText.split(/___|\[BLANK\]/g);
-                        return (
-                          <span className="leading-loose inline-flex items-center flex-wrap gap-y-2">
-                            {parts.map((part, i) => {
-                              const blankKey = i === 0 ? q.id : `${q.id}_blank_${i}`;
-                              const blankAnswer = userAnswers[blankKey] || '';
-                              const boxNumber = q.questionNumber + i;
-
-                              return (
-                                <React.Fragment key={i}>
-                                  <span>{part}</span>
-                                  {i < parts.length - 1 && (
-                                    <span className="inline-block relative mx-2 align-middle">
-                                      <input
-                                        type="text"
-                                        value={blankAnswer}
-                                        onChange={(e) => onAnswerChange(blankKey, e.target.value)}
-                                        placeholder={String(boxNumber)}
-                                        className="border border-[#444] text-center bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1 min-w-[130px] max-w-[190px] text-[15px] placeholder:text-black placeholder:opacity-100 placeholder:font-bold placeholder:text-center rounded-[2px] shadow-sm transition-colors"
-                                      />
-                                    </span>
-                                  )}
-                                </React.Fragment>
-                              );
-                            })}
-                          </span>
-                        );
-                      }
-                      return <span>{q.questionText}</span>;
-                    })()}
+                    {isCompletion && hasInlineBlank(q.questionText)
+                      ? renderInlineCompletion(q)
+                      : <span className="whitespace-pre-wrap">{q.questionText}</span>}
                   </div>
                 </div>
 
-                {/* Options below text for True/False/Not Given, Multiple Choice, or Multiple Response */}
-                {(q.type === 'true-false-not-given' || q.type === 'yes-no-not-given' || q.type === 'multiple-choice' || q.type === 'multiple-response') && (
+                {(isSingleChoice || isMultiChoice) && (
                   <div className="mt-4 space-y-3 pl-[3.25rem]">
-                    {q.options && q.options.length > 0 ? (
-                      q.options.map((opt) => {
-                        const isMulti = q.type === 'multiple-response';
-                        const currentValues = currentAnswer.split('|').filter(Boolean);
-                        const isSelected = isMulti ? currentValues.includes(opt.value) : currentAnswer === opt.value;
-                        
-                        const handleToggle = () => {
-                          if (isMulti) {
-                            if (isSelected) {
-                              onAnswerChange(q.id, currentValues.filter(v => v !== opt.value).sort().join('|'));
-                            } else {
-                              onAnswerChange(q.id, [...currentValues, opt.value].sort().join('|'));
-                            }
-                          } else {
-                            onAnswerChange(q.id, opt.value);
-                          }
-                        };
+                    {hasOptions ? q.options!.map((opt) => {
+                      const selectedValues = currentAnswer.split('|').filter(Boolean);
+                      const isSelected = isMultiChoice ? selectedValues.includes(opt.value) : currentAnswer === opt.value;
+                      const handleToggle = () => {
+                        if (isMultiChoice) {
+                          const next = isSelected
+                            ? selectedValues.filter((v) => v !== opt.value)
+                            : [...selectedValues, opt.value];
+                          onAnswerChange(q.id, [...new Set(next)].sort().join('|'));
+                        } else {
+                          onAnswerChange(q.id, opt.value);
+                        }
+                      };
 
-                        return (
-                          <label
-                            key={opt.value}
-                            onClick={(e) => { e.preventDefault(); handleToggle(); }}
-                            className="flex items-center cursor-pointer group"
-                          >
-                            <div className="relative flex items-center justify-center">
-                              <input
-                                type={isMulti ? "checkbox" : "radio"}
-                                name={`q-${q.id}`}
-                                checked={isSelected}
-                                onChange={() => {}}
-                                className="w-[16px] h-[16px] border-gray-400 text-black focus:ring-0 cursor-pointer accent-black"
-                              />
-                            </div>
-                            <span className="ml-3 text-[15px] text-black tracking-wide">{opt.label}</span>
-                          </label>
-                        );
-                      })
-                    ) : (
+                      return (
+                        <label
+                          key={opt.value}
+                          onClick={(e) => { e.preventDefault(); handleToggle(); }}
+                          className="flex items-center cursor-pointer group"
+                        >
+                          <input
+                            type={isMultiChoice ? 'checkbox' : 'radio'}
+                            name={`q-${q.id}`}
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-[16px] h-[16px] border-gray-400 text-black focus:ring-0 cursor-pointer accent-black"
+                          />
+                          <span className="ml-3 text-[15px] text-black tracking-wide">{opt.label}</span>
+                        </label>
+                      );
+                    }) : (
                       <input
                         type="text"
                         value={currentAnswer}
                         onChange={(e) => onAnswerChange(q.id, e.target.value)}
                         placeholder="Type answer here..."
-                        className="w-full max-w-[200px] border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1.5 text-[15px] placeholder:text-black placeholder:opacity-50 placeholder:font-normal rounded-[2px] shadow-sm transition-colors"
+                        className={textInputClass}
                       />
                     )}
                   </div>
                 )}
 
-                {/* Dropdown / Matching */}
-                {(q.type === 'dropdown' || q.type === 'matching' || q.type === 'matching-headings') && (
+                {shouldUseSelect && (
                   <div className="mt-3 pl-[3.25rem]">
-                    {q.options && q.options.length > 0 ? (
-                      <select
-                        value={currentAnswer}
-                        onChange={(e) => onAnswerChange(q.id, e.target.value)}
-                        className="border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] px-3 py-1.5 text-[15px] rounded-[2px] shadow-sm"
-                      >
-                        <option value="" disabled>Select...</option>
-                        {q.options.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={currentAnswer}
-                        onChange={(e) => onAnswerChange(q.id, e.target.value)}
-                        placeholder="Type answer here..."
-                        className="w-full max-w-[200px] border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1.5 text-[15px] placeholder:text-black placeholder:opacity-50 placeholder:font-normal rounded-[2px] shadow-sm transition-colors"
-                      />
-                    )}
+                    <select
+                      value={currentAnswer}
+                      onChange={(e) => onAnswerChange(q.id, e.target.value)}
+                      className="border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] px-3 py-1.5 text-[15px] rounded-[2px] shadow-sm max-w-full"
+                    >
+                      <option value="">Select...</option>
+                      {q.options!.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
                   </div>
                 )}
 
-                {/* Table Completion */}
                 {q.type === 'table-completion' && q.tableData && (
                   <div className="mt-4 pl-[3.25rem] overflow-x-auto w-full">
                     <table className="w-full min-w-[400px] border-collapse border border-[#444] text-[15px]">
@@ -221,7 +268,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                                       type="text"
                                       value={userAnswers[cell.inputId] || ''}
                                       onChange={(e) => onAnswerChange(cell.inputId, e.target.value)}
-                                      className="flex-1 border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] px-2 py-1 max-w-[200px] shadow-sm"
+                                      className="flex-1 border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] px-2 py-1 max-w-[220px] shadow-sm"
                                     />
                                   </div>
                                 )}
@@ -234,21 +281,40 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                   </div>
                 )}
 
-                {/* Input Controls Based on Question Type (For Fill in Blank only, since MC/TF is above) */}
-                <div className="mt-4 pl-[3.25rem]">
-                  {/* Fill In Blank / Text Box Input */}
-                  {q.type === 'fill-blank' && !q.questionText.includes('___') && !q.questionText.includes('[BLANK]') && (
-                    <div className="mt-2">
+                {shouldUseTextInput && (
+                  <div className="mt-4 pl-[3.25rem]">
+                    <input
+                      type="text"
+                      value={currentAnswer}
+                      onChange={(e) => onAnswerChange(q.id, e.target.value)}
+                      placeholder={String(q.questionNumber)}
+                      className={textInputClass}
+                    />
+                  </div>
+                )}
+
+                {!isSingleChoice && !isMultiChoice && !isCompletion && !isMatching && (
+                  <div className="mt-4 pl-[3.25rem]">
+                    {hasOptions ? (
+                      <select
+                        value={currentAnswer}
+                        onChange={(e) => onAnswerChange(q.id, e.target.value)}
+                        className="border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] px-3 py-1.5 text-[15px] rounded-[2px] shadow-sm max-w-full"
+                      >
+                        <option value="">Select...</option>
+                        {q.options!.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      </select>
+                    ) : (
                       <input
                         type="text"
                         value={currentAnswer}
                         onChange={(e) => onAnswerChange(q.id, e.target.value)}
-                        placeholder={String(q.questionNumber)}
-                        className="w-full max-w-[200px] border border-[#444] bg-white text-black font-bold focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] px-3 py-1.5 text-[15px] placeholder:text-black placeholder:opacity-50 placeholder:font-normal rounded-[2px] shadow-sm transition-all"
+                        placeholder="Type answer here..."
+                        className={textInputClass}
                       />
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
             </React.Fragment>
           );

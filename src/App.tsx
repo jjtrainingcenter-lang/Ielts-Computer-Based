@@ -372,7 +372,7 @@ export default function App() {
     const checkCorrect = (q: any, userAns: string) => {
       if (!userAns || !q.correctAnswer) return false;
       const cAnsArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : q.correctAnswer.split('|');
-      if (q.type === 'multiple-response') {
+      if (q.type === 'multiple-response' || q.type === 'multiple-choice-multiple-answer') {
         const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
         const cSet = cAnsArr.map((s: string) => s.trim().toLowerCase()).sort();
         return uSet.join('|') === cSet.join('|') && uSet.length > 0;

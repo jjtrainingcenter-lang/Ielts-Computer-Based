@@ -8,6 +8,32 @@ interface ValidationReportModalProps {
   onPublishAnyway: () => void;
 }
 
+const exactNumbersPresent = (values: number[], start: number, end: number) => {
+  if (values.length !== end - start + 1) return false;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted.every((value, index) => value === start + index);
+};
+
+const uniqueNumbers = (values: Array<number | undefined>) =>
+  [...new Set(values.filter((v): v is number => typeof v === 'number'))].sort((a, b) => a - b);
+
+const isChoiceOrMatchingType = (type: string) =>
+  [
+    'multiple-choice',
+    'multiple-choice-single-answer',
+    'multiple-choice-multiple-answer',
+    'multiple-response',
+    'matching',
+    'matching-information',
+    'matching-features',
+    'matching-sentence-endings',
+    'matching-headings',
+    'paragraph-matching',
+    'dropdown',
+    'map-labeling',
+    'diagram-labeling',
+  ].includes(type);
+
 export const ValidationReportModal: React.FC<ValidationReportModalProps> = ({ test, onClose, onPublishAnyway }) => {
   if (!test) return null;
 
@@ -16,12 +42,13 @@ export const ValidationReportModal: React.FC<ValidationReportModalProps> = ({ te
   const readingP = test.readingPassages || [];
   const writingT = test.writingTasks || [];
   const speakingT = test.speakingTasks || [];
+  const listeningData = test.listeningData || [];
 
   const issues: string[] = [];
   const warnings: string[] = [];
   const successes: string[] = [];
 
-  // 1. Lengths
+  // Required counts
   if (listeningQ.length === 40) successes.push('40/40 Listening questions');
   else issues.push(`Listening questions: ${listeningQ.length}/40`);
 
@@ -37,62 +64,118 @@ export const ValidationReportModal: React.FC<ValidationReportModalProps> = ({ te
   if (speakingT.length === 3) successes.push('3/3 Speaking parts');
   else issues.push(`Speaking parts: ${speakingT.length}/3`);
 
-  // 2. IDs
-  const allIds = new Set<string>();
-  let duplicateIds = false;
-  const checkId = (id: string) => {
-    if (!id) return;
-    if (allIds.has(id)) duplicateIds = true;
-    allIds.add(id);
-  };
-  listeningQ.forEach(q => checkId(q.id));
-  readingQ.forEach(q => checkId(q.id));
-  readingP.forEach(p => checkId(p.id));
+  // Exact numbering
+  const listeningNumbers = listeningQ.map((q) => q.questionNumber);
+  const readingNumbers = readingQ.map((q) => q.questionNumber);
+  if (exactNumbersPresent(listeningNumbers, 1, 40)) successes.push('Listening numbering is exactly 1–40');
+  else issues.push('Listening question numbers must contain each number 1–40 exactly once.');
 
-  if (!duplicateIds) successes.push('All IDs unique');
-  else issues.push('Duplicate IDs found in questions or passages.');
+  if (exactNumbersPresent(readingNumbers, 1, 40)) successes.push('Reading numbering is exactly 1–40');
+  else issues.push('Reading question numbers must contain each number 1–40 exactly once.');
 
-  // 3. Passage Links
-  let invalidLinks = 0;
-  const passageIds = new Set(readingP.map(p => p.id));
-  readingQ.forEach(q => {
-    if (q.passageId && !passageIds.has(q.passageId)) {
-      invalidLinks++;
-    } else if (!q.passageId) {
-      invalidLinks++; // Needs linkage
-    }
+  // IELTS part structure
+  const listeningParts = uniqueNumbers(listeningQ.map((q) => q.partNumber));
+  const readingParts = uniqueNumbers(readingP.map((p) => p.partNumber));
+  const speakingParts = uniqueNumbers(speakingT.map((s) => s.partNumber));
+
+  if ([1, 2, 3, 4].every((p) => listeningParts.includes(p))) successes.push('Listening Parts 1–4 present');
+  else issues.push(`Listening parts present: ${listeningParts.length ? listeningParts.join(', ') : 'none'}; expected 1, 2, 3, 4.`);
+
+  if ([1, 2, 3].every((p) => readingParts.includes(p))) successes.push('Reading Passage Parts 1–3 present');
+  else issues.push(`Reading passage parts present: ${readingParts.length ? readingParts.join(', ') : 'none'}; expected 1, 2, 3.`);
+
+  if ([1, 2, 3].every((p) => speakingParts.includes(p))) successes.push('Speaking Parts 1–3 present');
+  else issues.push(`Speaking parts present: ${speakingParts.length ? speakingParts.join(', ') : 'none'}; expected 1, 2, 3.`);
+
+  // IDs must exist and be unique inside a test. IDs may be reused in other tests because testId namespaces them.
+  const ids: string[] = [];
+  let missingIds = 0;
+  [...listeningQ, ...readingQ].forEach((q) => {
+    if (!q.id?.trim()) missingIds += 1;
+    else ids.push(q.id.trim());
   });
-  if (invalidLinks === 0 && readingQ.length > 0) successes.push('All passage links valid');
-  else if (invalidLinks > 0) issues.push(`${invalidLinks} reading questions have missing or invalid passage links.`);
+  readingP.forEach((p) => {
+    if (!p.id?.trim()) missingIds += 1;
+    else ids.push(p.id.trim());
+  });
 
-  // 4. Media & Answers
-  let missingAudio = false;
-  const lData = test.listeningData || [];
-  if (lData.length === 0 || !lData.some(d => d.audioUrl && d.audioUrl.trim() !== '')) {
-    missingAudio = true;
+  const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+  if (missingIds === 0 && duplicateIds.length === 0) successes.push('All question/passage IDs are present and unique');
+  if (missingIds > 0) issues.push(`${missingIds} question/passage IDs are missing.`);
+  if (duplicateIds.length > 0) issues.push(`Duplicate IDs found: ${[...new Set(duplicateIds)].join(', ')}`);
+
+  // Reading passage linkage
+  const passageIds = new Set(readingP.map((p) => p.id));
+  const invalidLinks = readingQ.filter((q) => !q.passageId || !passageIds.has(q.passageId));
+  if (invalidLinks.length === 0 && readingQ.length > 0) successes.push('All Reading passage links are valid');
+  else if (invalidLinks.length > 0) issues.push(`${invalidLinks.length} Reading questions have missing or invalid passageId references.`);
+
+  // Option banks
+  const optionProblems = [...listeningQ, ...readingQ].filter((q) => {
+    if (!isChoiceOrMatchingType(q.type)) return false;
+    if (['map-labeling', 'diagram-labeling'].includes(q.type) && !q.options?.length) return false; // some label questions are free text
+    return !q.options || q.options.length === 0 || q.options.some((opt) => !opt.value || !opt.label);
+  });
+  if (optionProblems.length === 0) successes.push('Choice/matching option banks are valid');
+  else issues.push(`${optionProblems.length} choice/matching questions have missing or invalid options.`);
+
+  // Listening audio can be a single full recording or multiple part recordings.
+  const audioTracks = listeningData.filter((d) => d.audioUrl?.trim());
+  if (audioTracks.length === 0) {
+    warnings.push('Listening audio missing. Add one full recording or part recordings before live use.');
+  } else if (audioTracks.length === 1) {
+    successes.push('Listening audio: one full recording detected');
+  } else {
+    successes.push(`Listening audio: ${audioTracks.length} part recordings detected`);
+    const trackParts = uniqueNumbers(audioTracks.map((d) => d.partNumber));
+    if (![1, 2, 3, 4].every((p) => trackParts.includes(p))) {
+      warnings.push(`Multiple Listening audio files supplied, but audio parts are ${trackParts.join(', ')}; expected Parts 1–4 for separate-track mode.`);
+    }
   }
-  if (!missingAudio) successes.push('Listening audio present');
-  else warnings.push('Listening audio missing');
 
-  let missingAnswers = 0;
-  [...listeningQ, ...readingQ].forEach(q => {
-    if (!q.correctAnswer || (Array.isArray(q.correctAnswer) && q.correctAnswer.length === 0)) {
-      missingAnswers++;
-    }
-  });
-  if (missingAnswers > 0) warnings.push(`${missingAnswers} correct answers missing`);
+  // Answer key completeness
+  const missingListeningAnswers = listeningQ.filter((q) =>
+    !q.correctAnswer || (Array.isArray(q.correctAnswer) && q.correctAnswer.length === 0)
+  ).length;
+  const missingReadingAnswers = readingQ.filter((q) =>
+    !q.correctAnswer || (Array.isArray(q.correctAnswer) && q.correctAnswer.length === 0)
+  ).length;
 
-  // Media missing warnings
-  let missingMedia = 0;
-  [...listeningQ, ...readingQ].forEach(q => {
-    if (q.imageUrl && !q.imageUrl.trim()) missingMedia++;
-    if (q.media && (!q.media.url || !q.media.url.trim())) missingMedia++;
+  if (missingListeningAnswers === 0) successes.push('Listening answer key complete');
+  else warnings.push(`${missingListeningAnswers} Listening correct answers are missing.`);
+
+  if (missingReadingAnswers === 0) successes.push('Reading answer key complete');
+  else warnings.push(`${missingReadingAnswers} Reading correct answers are missing.`);
+
+  // Media integrity and likely-required visuals
+  let brokenMediaRefs = 0;
+  [...listeningQ, ...readingQ].forEach((q) => {
+    if (q.media && !q.media.url?.trim()) brokenMediaRefs += 1;
+    if (q.groupMedia && !q.groupMedia.url?.trim()) brokenMediaRefs += 1;
   });
-  writingT.forEach(w => {
-    if (w.imageUrl && !w.imageUrl.trim()) missingMedia++;
-    if (w.media && (!w.media.url || !w.media.url.trim())) missingMedia++;
+  writingT.forEach((w) => {
+    if (w.media && !w.media.url?.trim()) brokenMediaRefs += 1;
   });
-  if (missingMedia > 0) warnings.push(`Image/Media missing for ${missingMedia} items`);
+  if (brokenMediaRefs > 0) warnings.push(`${brokenMediaRefs} media objects have an empty URL.`);
+
+  const visualQuestionMissingMedia = [...listeningQ, ...readingQ].filter((q) =>
+    ['map-labeling', 'diagram-labeling'].includes(q.type) &&
+    !q.media?.url && !q.groupMedia?.url && !q.imageUrl
+  );
+  if (visualQuestionMissingMedia.length > 0) {
+    warnings.push(`${visualQuestionMissingMedia.length} map/diagram questions have no visible media reference.`);
+  }
+
+  const writingTask1 = writingT.find((w) => w.taskNumber === 1);
+  const task1HasVisual = !!(
+    writingTask1?.media?.url ||
+    writingTask1?.imageUrl ||
+    writingTask1?.chartData ||
+    writingTask1?.chartType === 'letter'
+  );
+  if (writingTask1 && !task1HasVisual) {
+    warnings.push('Writing Task 1 has no image/chart data. This is valid for letters, but Academic Task 1 normally needs its graph/map/process/table visual.');
+  }
 
   const hasIssues = issues.length > 0;
 
@@ -105,62 +188,58 @@ export const ValidationReportModal: React.FC<ValidationReportModalProps> = ({ te
             <X className="w-6 h-6" />
           </button>
         </div>
+
         <div className="p-6 overflow-y-auto space-y-6">
-          
-          {hasIssues && (
+          {hasIssues ? (
             <div className="bg-red-50 text-red-700 p-4 rounded-lg flex gap-3 border border-red-200">
               <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-bold">Import Incomplete</h4>
-                <p className="text-sm mt-1">The JSON test is missing required fields. Please fix the issues before publishing.</p>
+                <p className="text-sm mt-1">Required IELTS structure is incomplete. Fix the red items before publishing.</p>
               </div>
             </div>
-          )}
-
-          {!hasIssues && warnings.length > 0 && (
+          ) : warnings.length > 0 ? (
             <div className="bg-amber-50 text-amber-700 p-4 rounded-lg flex gap-3 border border-amber-200">
               <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
-                <h4 className="font-bold">Warnings</h4>
-                <p className="text-sm mt-1">Test structure is complete, but some media or answers are missing.</p>
+                <h4 className="font-bold">Structure Passed With Warnings</h4>
+                <p className="text-sm mt-1">The full test structure is valid. Review media/audio/answer warnings before live use.</p>
               </div>
             </div>
-          )}
-
-          {!hasIssues && warnings.length === 0 && (
+          ) : (
             <div className="bg-green-50 text-green-700 p-4 rounded-lg flex gap-3 border border-green-200">
               <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-bold">Validation Passed</h4>
-                <p className="text-sm mt-1">All required fields and media are present.</p>
+                <p className="text-sm mt-1">Required test structure, links, answers and referenced media are present.</p>
               </div>
             </div>
           )}
 
           <div className="space-y-3">
             {successes.map((s, i) => (
-              <div key={i} className="flex items-center gap-2 text-green-700 text-sm">
-                <CheckCircle2 className="w-4 h-4" />
+              <div key={`success-${i}`} className="flex items-center gap-2 text-green-700 text-sm">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>{s}</span>
               </div>
             ))}
-            
+
             {warnings.map((w, i) => (
-              <div key={i} className="flex items-center gap-2 text-amber-600 text-sm">
-                <AlertTriangle className="w-4 h-4" />
+              <div key={`warning-${i}`} className="flex items-center gap-2 text-amber-600 text-sm">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{w}</span>
               </div>
             ))}
 
             {issues.map((issue, i) => (
-              <div key={i} className="flex items-center gap-2 text-red-600 text-sm font-semibold">
-                <X className="w-4 h-4" />
+              <div key={`issue-${i}`} className="flex items-center gap-2 text-red-600 text-sm font-semibold">
+                <X className="w-4 h-4 shrink-0" />
                 <span>{issue}</span>
               </div>
             ))}
           </div>
-
         </div>
+
         <div className="p-4 border-t bg-slate-50 rounded-b-xl flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -168,6 +247,7 @@ export const ValidationReportModal: React.FC<ValidationReportModalProps> = ({ te
           >
             {hasIssues ? 'Close & Fix Issues' : 'Cancel'}
           </button>
+
           {!hasIssues && (
             <button
               onClick={() => {
