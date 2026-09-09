@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message != 'feat: show Firebase audio upload progress'
+    if: "${{ github.event.head_commit.message != 'feat: show Firebase audio upload progress' }}"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
