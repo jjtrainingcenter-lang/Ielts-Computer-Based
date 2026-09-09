@@ -31,8 +31,12 @@ import {
   resolveSectionTimers,
   SESSION_STORAGE_KEY
 } from './lib/candidateStorage';
-import { signInWithGoogle, isConfigured } from './lib/firebase';
-import { HelpCircle, X, ArrowLeft } from 'lucide-react';
+import {
+  signInWithGoogle,
+  rememberAdminSession,
+  hasRememberedAdminSession,
+} from './lib/firebase';
+import { HelpCircle, X } from 'lucide-react';
 
 interface StoredSession {
   candidate: Candidate | null;
@@ -73,6 +77,7 @@ const getInitialSession = (): StoredSession | null => {
 
 export default function App() {
   const initialSession = getInitialSession();
+  const rememberedAdminSession = hasRememberedAdminSession();
 
   // Candidate Profile & Assigned Tests State
   const [candidate, setCandidate] = useState<Candidate | null>(() => initialSession?.candidate || null);
@@ -91,9 +96,10 @@ export default function App() {
   const [activePassageId, setActivePassageId] = useState<string>(() => initialSession?.activePassageId || 'p1');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(() => initialSession?.currentQuestionIndex ?? 0);
 
-  // Admin State
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
+  // Admin State. A remembered admin session survives refresh/browser restart and is
+  // cleared only by the explicit Logout action in AdminDashboard.
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => rememberedAdminSession);
+  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState<boolean>(() => rememberedAdminSession);
 
   // User Responses
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>(() => initialSession?.userAnswers || {});
@@ -150,13 +156,11 @@ export default function App() {
       const tests = await getAllTests();
       setAllAvailableTests(tests);
 
-      // If initial session had a specific test ID, restore it if currentTest isn't fully set
       if (initialSession?.currentTestId) {
         const found = tests.find(t => t.id === initialSession.currentTestId);
         if (found) setCurrentTest(found);
       }
 
-      // If logged in with candidate ID, fetch assigned tests
       if (candidateId) {
         const { candidate: c, tests: cTests } = await getAssignedTestsForCandidate(candidateId);
         if (c) setCandidate(c);
@@ -255,7 +259,6 @@ export default function App() {
       }
     };
 
-    // Run autosave on state changes
     const autosaveTimer = setTimeout(saveStateBeforeExit, 1000);
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -330,7 +333,6 @@ export default function App() {
     }
   };
 
-  // Timer countdown hook using Date.now() based deadline
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isTimerRunning && sectionDeadline !== null) {
@@ -346,12 +348,11 @@ export default function App() {
           handleSectionTimeExpired();
           clearInterval(timer);
         }
-      }, 500); // Check more frequently to avoid skipping zero
+      }, 500);
     }
     return () => clearInterval(timer);
   }, [isTimerRunning, sectionDeadline]);
 
-  // Section Questions
   const sectionQuestions =
     activeSection === 'listening'
       ? (currentTest.listeningQuestions || [])
@@ -359,16 +360,12 @@ export default function App() {
       ? (currentTest.readingQuestions || [])
       : [];
 
-  // Finish and submit test
   const handleSubmitTest = async () => {
     setIsTimerRunning(false);
     setExamPhase('submitted');
     setIsResultsModalOpen(true);
-    
-    // Clear persisted active exam state upon completion
     localStorage.removeItem(SESSION_STORAGE_KEY);
     
-    // Calculate raw scores
     const checkCorrect = (q: any, userAns: string) => {
       if (!userAns || !q.correctAnswer) return false;
       const cAnsArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : q.correctAnswer.split('|');
@@ -392,7 +389,6 @@ export default function App() {
       if (checkCorrect(q, userAnswers[q.id])) readingCorrect++;
     });
 
-    // Save result via candidate storage helper
     await saveTestResult({
       candidateId: candidateId || '000000',
       candidateName: candidateName || 'Candidate',
@@ -412,7 +408,6 @@ export default function App() {
     });
   };
 
-  // Section Selector
   const handleSelectSection = (sec: TestSection) => {
     setActiveSection(sec);
     setCurrentQuestionIndex(0);
@@ -421,7 +416,6 @@ export default function App() {
     setSectionDeadline(Date.now() + duration * 1000);
   };
 
-  // Answers & Flags
   const handleAnswerChange = (qId: string, answer: string) => {
     setUserAnswers((prev) => ({ ...prev, [qId]: answer }));
   };
@@ -430,7 +424,6 @@ export default function App() {
     setFlaggedQuestions((prev) => ({ ...prev, [qId]: !prev[qId] }));
   };
 
-  // Highlighting
   const handleAddHighlight = (item: Omit<HighlightItem, 'id' | 'createdAt'>) => {
     const newItem: HighlightItem = {
       ...item,
@@ -444,7 +437,6 @@ export default function App() {
     setHighlights((prev) => prev.filter((h) => h.id !== id));
   };
 
-  // AI Evaluations
   const handleEvaluateWritingAI = async () => {
     setIsEvaluatingAI(true);
     try {
@@ -515,7 +507,6 @@ export default function App() {
     }
   };
 
-  // Candidate Login Handler
   const handleCandidateLogin = (cand: Candidate, tests: IELTSTest[]) => {
     setCandidate(cand);
     setCandidateName(cand.name);
@@ -524,22 +515,18 @@ export default function App() {
     setIsLoggedIn(true);
 
     if (tests.length > 1) {
-      // Multiple tests available for this candidate registration ID -> show test selector screen
       setIsSelectingTest(true);
       setHasConfirmedInstructions(false);
     } else if (tests.length === 1) {
-      // Single test assigned -> select it and proceed to instructions
       setCurrentTest(tests[0]);
       setIsSelectingTest(false);
       setHasConfirmedInstructions(false);
     } else {
-      // No tests assigned yet
       setIsSelectingTest(true);
       setHasConfirmedInstructions(false);
     }
   };
 
-  // Candidate selects a specific test to write
   const handleSelectAssignedTest = (test: IELTSTest) => {
     setCurrentTest(test);
     setIsSelectingTest(false);
@@ -551,7 +538,6 @@ export default function App() {
     setWritingTask2('');
   };
 
-  // Candidate starts the active test from instructions
   const handleStartTest = (test: IELTSTest, name: string, id: string, initialSec: TestSection = 'listening') => {
     setCurrentTest(test);
     setCandidateName(name);
@@ -570,7 +556,6 @@ export default function App() {
     setHasConfirmedInstructions(true);
   };
 
-  // Sign out / Logout
   const handleLogout = () => {
     localStorage.removeItem(SESSION_STORAGE_KEY);
     setIsLoggedIn(false);
@@ -582,11 +567,12 @@ export default function App() {
     setIsTimerRunning(false);
   };
 
-  // Admin Click
   const handleAdminClick = async () => {
     try {
       const user = await signInWithGoogle();
       if (user) {
+        rememberAdminSession();
+        setIsAdminLoggedIn(true);
         setIsAdminDashboardOpen(true);
       }
     } catch (e: any) {
@@ -594,7 +580,6 @@ export default function App() {
     }
   };
 
-  // Theme contrast wrapper class
   const themeClass =
     settings.contrast === 'yellow-black'
       ? 'bg-black text-yellow-300 font-bold'
@@ -604,12 +589,12 @@ export default function App() {
       ? 'dark bg-slate-950 text-white'
       : 'bg-white text-slate-900';
 
-  // 1. Not Logged In View
   if (!isLoggedIn && !isAdminLoggedIn) {
     return (
       <LoginScreen
         onCandidateLogin={handleCandidateLogin}
         onAdminLogin={() => {
+          rememberAdminSession();
           setIsAdminLoggedIn(true);
           setIsAdminDashboardOpen(true);
         }}
@@ -617,7 +602,6 @@ export default function App() {
     );
   }
 
-  // 2. Candidate Logged In & Choosing Between Multiple Assigned Tests
   if (isLoggedIn && !isAdminLoggedIn && isSelectingTest && candidate) {
     return (
       <CandidateTestSelection
@@ -629,7 +613,6 @@ export default function App() {
     );
   }
 
-  // 3. Candidate Logged In & Reviewing Instructions for Selected Test
   if (isLoggedIn && !isAdminLoggedIn && !hasConfirmedInstructions) {
     return (
       <CandidateInstructions
@@ -649,7 +632,6 @@ export default function App() {
     );
   }
 
-  // 4. Exam Phases
   if (isLoggedIn && !isAdminLoggedIn && hasConfirmedInstructions) {
     if (examPhase === 'device_check') {
       return <ExamDeviceCheck onContinue={() => setExamPhase('section_intro')} />;
@@ -710,7 +692,6 @@ export default function App() {
     }
   }
 
-  // Resolve active timers and badge info
   const resolvedTimers = resolveSectionTimers(currentTest, candidate);
   const timerBadgeText = candidate?.timerPreset && candidate.timerPreset !== 'standard'
     ? (candidate.timerPreset === 'extra25' ? '+25% Extra Time' : candidate.timerPreset === 'extra50' ? '+50% Extra Time' : candidate.timerPreset === 'rapid' ? 'Speed Drill' : 'Custom Timing')
@@ -718,10 +699,8 @@ export default function App() {
     ? `${(candidate.timeMultiplier * 100).toFixed(0)}% Speed`
     : undefined;
 
-  // 4. Main Inspera CBT Exam Player
   return (
     <div className={`h-screen w-screen flex flex-col font-sans ${themeClass} select-none overflow-hidden`}>
-      {/* Top Exam Header */}
       <ExamHeader
         candidateName={candidateName}
         candidateId={candidateId}
@@ -730,7 +709,6 @@ export default function App() {
         currentQuestionIndex={currentQuestionIndex}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenHelp={() => {
-          // Phase 5 requires Help NOT to pause the timer.
           setIsHelpModalOpen(true);
         }}
         activeSection={activeSection}
@@ -740,7 +718,6 @@ export default function App() {
         }}
       />
 
-      {/* Test Title & Section Banner Area */}
       <div className="bg-white pt-2.5 px-6 pb-2 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs relative z-10">
         <div className="flex items-center space-x-3 overflow-x-auto pb-1 sm:pb-0">
           <div className="px-4 py-2 rounded-lg text-sm font-bold bg-[#214162] text-white shadow-xs flex items-center space-x-2 shrink-0">
@@ -770,9 +747,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Workspace Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        {/* READING SECTION (Split Pane) */}
         {activeSection === 'reading' && (
           <ResizableSplitPane
             leftPane={
@@ -800,12 +775,9 @@ export default function App() {
           />
         )}
 
-        {/* LISTENING SECTION */}
         {activeSection === 'listening' && (() => {
           const activePartNum = currentTest.listeningQuestions[currentQuestionIndex]?.partNumber || 1;
           const activeData = currentTest.listeningData.find(d => d.partNumber === activePartNum) || currentTest.listeningData[0];
-          
-          // Determine which audio track to use to prevent accidental reset
           const firstAudioData = currentTest.listeningData.find(d => d.audioUrl) || activeData;
           const hasMultipleAudio = currentTest.listeningData.filter(d => d.audioUrl).length > 1;
           const audioDataForPlayer = hasMultipleAudio ? activeData : firstAudioData;
@@ -842,7 +814,6 @@ export default function App() {
           );
         })()}
 
-        {/* WRITING SECTION */}
         {activeSection === 'writing' && (
           <div className="flex-1 overflow-hidden">
             <WritingEditor
@@ -858,7 +829,6 @@ export default function App() {
           </div>
         )}
 
-        {/* SPEAKING SECTION */}
         {activeSection === 'speaking' && (
           <div className="flex-1 overflow-hidden">
             <SpeakingRecorder
@@ -871,7 +841,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Bottom Question Navigation Dock (for Listening & Reading) */}
       {(activeSection === 'reading' || activeSection === 'listening') && (
         <QuestionNavigator
           questions={sectionQuestions}
@@ -883,7 +852,6 @@ export default function App() {
         />
       )}
 
-      {/* Modals */}
       {isAdminDashboardOpen && (
         <AdminDashboard
           onClose={() => {
@@ -928,7 +896,6 @@ export default function App() {
         onStartTest={handleStartTest}
       />
 
-      {/* Help & Instructions Modal */}
       {isHelpModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
