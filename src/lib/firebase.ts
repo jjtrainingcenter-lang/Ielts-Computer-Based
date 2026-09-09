@@ -7,7 +7,7 @@ import {
   setPersistence,
   browserLocalPersistence,
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -26,7 +26,13 @@ let googleProvider;
 if (isConfigured) {
   app = getApps().length === 0 ? initializeApp(firebaseConfig as any) : getApp();
   auth = getAuth(app);
-  db = getFirestore(app);
+
+  // Admin-created IELTS test objects contain many optional fields (for example
+  // imageUrl/media/captions). Firestore rejects an object if any optional field
+  // is literally undefined. Ignore only those undefined fields while preserving
+  // every real value and URL exactly as entered by the Admin.
+  db = initializeFirestore(app, { ignoreUndefinedProperties: true });
+
   storage = getStorage(app);
   // The SDK normally retries a failed upload for up to ~10 minutes. That made
   // permission/billing/bucket problems look like a frozen 0% progress bar.
