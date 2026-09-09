@@ -10,22 +10,25 @@ const removeDemoCandidateLoginPlugin = (): Plugin => ({
     const cleanId = id.split('?')[0].replace(/\\/g, '/');
     if (!cleanId.endsWith('/src/components/LoginScreen.tsx')) return null;
 
-    let next = code;
-    next = next.replace(', Sparkles', '');
+    if (!code.includes('Quick Demo Candidates Helper') && !code.includes('Quick filler for testing/demo')) {
+      return null;
+    }
+
+    let next = code.replace(', Sparkles', '');
 
     const helperStart = next.indexOf('  // Quick filler for testing/demo');
-    const helperEnd = next.indexOf('  return (', helperStart);
-    if (helperStart === -1 || helperEnd === -1) {
-      throw new Error('Could not find demo quick-fill helper in LoginScreen.tsx');
+    if (helperStart !== -1) {
+      const helperEnd = next.indexOf('  return (', helperStart);
+      if (helperEnd === -1) throw new Error('Could not locate end of demo quick-fill helper');
+      next = next.slice(0, helperStart) + next.slice(helperEnd);
     }
-    next = next.slice(0, helperStart) + next.slice(helperEnd);
 
     const demoStart = next.indexOf('            {/* Quick Demo Candidates Helper */}');
-    const formEnd = next.indexOf('          </form>', demoStart);
-    if (demoStart === -1 || formEnd === -1) {
-      throw new Error('Could not find demo candidate registration block in LoginScreen.tsx');
+    if (demoStart !== -1) {
+      const formEnd = next.indexOf('          </form>', demoStart);
+      if (formEnd === -1) throw new Error('Could not locate end of demo candidate block');
+      next = next.slice(0, demoStart) + next.slice(formEnd);
     }
-    next = next.slice(0, demoStart) + next.slice(formEnd);
 
     return { code: next, map: null };
   },
