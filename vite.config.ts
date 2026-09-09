@@ -3,6 +3,33 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, type Plugin} from 'vite';
 
+const removeDemoCandidateLoginPlugin = (): Plugin => ({
+  name: 'jj-remove-demo-candidate-login',
+  enforce: 'pre',
+  transform(code, id) {
+    const cleanId = id.split('?')[0].replace(/\\/g, '/');
+    if (!cleanId.endsWith('/src/components/LoginScreen.tsx')) return null;
+
+    let next = code;
+    next = next.replace(', Sparkles', '');
+
+    const quickFillBlock = `  // Quick filler for testing/demo\n  const handleQuickFill = (id: string, birth: string) => {\n    setRegId(id);\n    setDob(birth);\n    setError('');\n  };\n\n`;
+    if (!next.includes(quickFillBlock)) {
+      throw new Error('Could not find demo quick-fill helper in LoginScreen.tsx');
+    }
+    next = next.replace(quickFillBlock, '');
+
+    const demoStart = next.indexOf('            {/* Quick Demo Candidates Helper */}');
+    const formEnd = next.indexOf('          </form>', demoStart);
+    if (demoStart === -1 || formEnd === -1) {
+      throw new Error('Could not find demo candidate registration block in LoginScreen.tsx');
+    }
+    next = next.slice(0, demoStart) + next.slice(formEnd);
+
+    return { code: next, map: null };
+  },
+});
+
 /**
  * AdminDashboard is a very large legacy component. This guarded pre-transform
  * adds upload diagnostics without duplicating the whole file here.
@@ -50,7 +77,7 @@ const adminAudioUploadProgressPlugin = (): Plugin => ({
     next = replaceOnce(
       next,
       "  const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {\n    if (!e.target.files || e.target.files.length === 0) return;\n    if (!isConfigured || !storage) {\n      setStatus(\"Firebase Storage is unconfigured. You can paste direct audio URL below.\");\n      return;\n    }\n\n    const file = e.target.files[0];",
-      "  const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {\n    if (!e.target.files || e.target.files.length === 0) return;\n    const file = e.target.files[0];\n\n    if (!isConfigured || !storage) {\n      setStatus(\"Firebase Storage is unconfigured. You can paste a direct audio URL below.\");\n      return;\n    }\n\n    // A passcode-only Admin session is not the same as Firebase Authentication.\n    // Storage rules normally require request.auth, so restore/check Firebase Auth\n    // before starting a large file upload.\n    try {\n      if (auth?.authStateReady) await auth.authStateReady();\n      if (!auth?.currentUser) {\n        setStatus(\"Firebase Storage needs Google authentication. Opening Google sign-in...\");\n        const user = await signInWithGoogle();\n        if (!user) {\n          setStatus(\"Audio upload stopped: Google authentication is required for Firebase Storage.\");\n          return;\n        }\n      }\n    } catch (authError: any) {\n      const authCode = authError?.code || '';\n      if (authCode === 'auth/unauthorized-domain') {\n        setStatus(\"Audio upload blocked: this website domain is not authorized in Firebase Authentication. Add the current domain under Authentication → Settings → Authorized domains, then sign in with Google.\");\n      } else if (authCode === 'auth/popup-blocked' || authCode === 'auth/popup-closed-by-user') {\n        setStatus(\"Audio upload needs Firebase Google sign-in. Allow the Google sign-in popup, then retry the upload.\");\n      } else {\n        setStatus(`Audio upload authentication failed: ${authError?.message || authCode || 'Unknown authentication error'}`);\n      }\n      return;\n    }",
+      "  const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {\n    if (!e.target.files || e.target.files.length === 0) return;\n    const file = e.target.files[0];\n\n    if (!isConfigured || !storage) {\n      setStatus(\"Firebase Storage is unconfigured. You can paste a direct audio URL below.\");\n      return;\n    }\n\n    try {\n      if (auth?.authStateReady) await auth.authStateReady();\n      if (!auth?.currentUser) {\n        setStatus(\"Firebase Storage needs Google authentication. Opening Google sign-in...\");\n        const user = await signInWithGoogle();\n        if (!user) {\n          setStatus(\"Audio upload stopped: Google authentication is required for Firebase Storage.\");\n          return;\n        }\n      }\n    } catch (authError: any) {\n      const authCode = authError?.code || '';\n      if (authCode === 'auth/unauthorized-domain') {\n        setStatus(\"Audio upload blocked: this website domain is not authorized in Firebase Authentication. Add the current domain under Authentication → Settings → Authorized domains, then sign in with Google.\");\n      } else if (authCode === 'auth/popup-blocked' || authCode === 'auth/popup-closed-by-user') {\n        setStatus(\"Audio upload needs Firebase Google sign-in. Allow the Google sign-in popup, then retry the upload.\");\n      } else {\n        setStatus(`Audio upload authentication failed: ${authError?.message || authCode || 'Unknown authentication error'}`);\n      }\n      return;\n    }",
       'audio auth preflight',
     );
 
@@ -93,17 +120,14 @@ const adminAudioUploadProgressPlugin = (): Plugin => ({
 
 export default defineConfig(() => {
   return {
-    plugins: [adminAudioUploadProgressPlugin(), react(), tailwindcss()],
+    plugins: [removeDemoCandidateLoginPlugin(), adminAudioUploadProgressPlugin(), react(), tailwindcss()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };
