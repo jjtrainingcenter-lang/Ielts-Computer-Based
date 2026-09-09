@@ -1,0 +1,229 @@
+name: One-time audio upload progress patch
+
+on:
+  push:
+    branches:
+      - chatgpt/audio-upload-progress
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'feat: show Firebase audio upload progress'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/audio-upload-progress
+          fetch-depth: 0
+
+      - name: Patch AdminDashboard upload progress UI
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/components/AdminDashboard.tsx')
+          text = path.read_text()
+
+          old_state = """  const [jsonText, setJsonText] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+"""
+          new_state = """  const [jsonText, setJsonText] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadKind, setUploadKind] = useState<'audio' | 'image' | null>(null);
+  const [uploadFileName, setUploadFileName] = useState('');
+  const [uploadBytesTransferred, setUploadBytesTransferred] = useState(0);
+  const [uploadTotalBytes, setUploadTotalBytes] = useState(0);
+"""
+          if text.count(old_state) != 1:
+              raise SystemExit(f'Expected state block once, found {text.count(old_state)}')
+          text = text.replace(old_state, new_state, 1)
+
+          old_audio = """    const file = e.target.files[0];
+    const storageRef = ref(storage, `audio/${Date.now()}_${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    setIsUploading(true);
+    setStatus(\"Uploading audio...\");
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      },
+      (error) => {
+        console.error(\"Upload failed\", error);
+        setStatus(`Upload failed: ${error.message}`);
+        setIsUploading(false);
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        setListeningAudioUrl(downloadURL);
+        setStatus(\"Audio uploaded successfully!\");
+        setIsUploading(false);
+        setTimeout(() => setStatus(null), 3000);
+      }
+    );
+"""
+          new_audio = """    const file = e.target.files[0];
+    const storageRef = ref(storage, `audio/${Date.now()}_${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    setUploadKind('audio');
+    setUploadFileName(file.name);
+    setUploadProgress(0);
+    setUploadBytesTransferred(0);
+    setUploadTotalBytes(file.size);
+    setIsUploading(true);
+    setStatus(`Uploading audio: ${file.name} — 0%`);
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = snapshot.totalBytes > 0
+          ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+          : 0;
+        setUploadProgress(progress);
+        setUploadBytesTransferred(snapshot.bytesTransferred);
+        setUploadTotalBytes(snapshot.totalBytes || file.size);
+        setStatus(`Uploading audio: ${file.name} — ${Math.round(progress)}%`);
+      },
+      (error) => {
+        console.error(\"Upload failed\", error);
+        setStatus(`Upload failed: ${error.message}`);
+        setIsUploading(false);
+        setUploadKind(null);
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        setListeningAudioUrl(downloadURL);
+        setUploadProgress(100);
+        setUploadBytesTransferred(file.size);
+        setUploadTotalBytes(file.size);
+        setStatus(\"Audio uploaded successfully! 100% complete.\");
+        setIsUploading(false);
+        setUploadKind(null);
+        setTimeout(() => setStatus(null), 3000);
+      }
+    );
+"""
+          if text.count(old_audio) != 1:
+              raise SystemExit(f'Expected audio upload block once, found {text.count(old_audio)}')
+          text = text.replace(old_audio, new_audio, 1)
+
+          old_image_start = """    setIsUploading(true);
+    setStatus(\"Uploading image...\");
+"""
+          new_image_start = """    setUploadKind('image');
+    setUploadProgress(0);
+    setIsUploading(true);
+    setStatus(\"Uploading image...\");
+"""
+          if text.count(old_image_start) != 1:
+              raise SystemExit(f'Expected image upload start once, found {text.count(old_image_start)}')
+          text = text.replace(old_image_start, new_image_start, 1)
+
+          old_image_error = """        setStatus(`Upload failed: ${error.message}`);
+        setIsUploading(false);
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        onComplete(downloadURL);
+        setStatus(\"Image uploaded successfully!\");
+        setIsUploading(false);
+"""
+          new_image_error = """        setStatus(`Upload failed: ${error.message}`);
+        setIsUploading(false);
+        setUploadKind(null);
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        onComplete(downloadURL);
+        setStatus(\"Image uploaded successfully!\");
+        setIsUploading(false);
+        setUploadKind(null);
+"""
+          if text.count(old_image_error) != 1:
+              raise SystemExit(f'Expected image completion block once, found {text.count(old_image_error)}')
+          text = text.replace(old_image_error, new_image_error, 1)
+
+          old_ui = """                  <div className=\"flex items-center space-x-3\">
+                    <label className=\"flex items-center space-x-2 bg-white border border-slate-300 px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors\">
+                      <UploadCloud className=\"w-4 h-4 text-blue-600\" />
+                      <span className=\"text-xs font-medium\">Upload MP3</span>
+                      <input type=\"file\" accept=\"audio/*\" onChange={handleAudioUpload} className=\"hidden\" />
+                    </label>
+                    <div className=\"flex-1\">
+                      <input
+                        type=\"text\"
+                        value={listeningAudioUrl}
+                        onChange={(e) => setListeningAudioUrl(e.target.value)}
+                        placeholder=\"Or enter direct MP3 audio URL here...\"
+                        className=\"w-full p-2 border border-slate-300 rounded-lg text-xs bg-white\"
+                      />
+                    </div>
+                  </div>
+"""
+          new_ui = """                  <div className=\"flex items-center space-x-3\">
+                    <label className={`flex items-center space-x-2 bg-white border border-slate-300 px-3 py-2 rounded-lg transition-colors ${isUploading && uploadKind === 'audio' ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-slate-50'}`}>
+                      <UploadCloud className=\"w-4 h-4 text-blue-600\" />
+                      <span className=\"text-xs font-medium\">{isUploading && uploadKind === 'audio' ? 'Uploading...' : 'Upload MP3'}</span>
+                      <input type=\"file\" accept=\"audio/*\" onChange={handleAudioUpload} disabled={isUploading} className=\"hidden\" />
+                    </label>
+                    <div className=\"flex-1\">
+                      <input
+                        type=\"text\"
+                        value={listeningAudioUrl}
+                        onChange={(e) => setListeningAudioUrl(e.target.value)}
+                        placeholder=\"Or enter direct MP3 audio URL here...\"
+                        className=\"w-full p-2 border border-slate-300 rounded-lg text-xs bg-white\"
+                      />
+                    </div>
+                  </div>
+
+                  {isUploading && uploadKind === 'audio' && (
+                    <div className=\"rounded-lg border border-blue-200 bg-white p-3 space-y-2 shadow-sm\">
+                      <div className=\"flex items-center justify-between gap-3\">
+                        <div className=\"min-w-0\">
+                          <p className=\"text-xs font-bold text-slate-800 truncate\">Uploading {uploadFileName || 'audio file'}</p>
+                          <p className=\"text-[10px] text-slate-500 mt-0.5\">Keep this tab open until the upload reaches 100%.</p>
+                        </div>
+                        <span className=\"text-sm font-black text-blue-700 tabular-nums\">{Math.round(uploadProgress)}%</span>
+                      </div>
+                      <div className=\"h-3 w-full overflow-hidden rounded-full bg-blue-100 border border-blue-200\" role=\"progressbar\" aria-label=\"Audio upload progress\" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(uploadProgress)}>
+                        <div
+                          className=\"h-full bg-blue-600 transition-[width] duration-300 ease-out\"
+                          style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%` }}
+                        />
+                      </div>
+                      <div className=\"flex items-center justify-between text-[10px] font-medium text-slate-600 tabular-nums\">
+                        <span>{(uploadBytesTransferred / 1024 / 1024).toFixed(1)} MB uploaded</span>
+                        <span>{uploadTotalBytes > 0 ? `${(uploadTotalBytes / 1024 / 1024).toFixed(1)} MB total` : 'Calculating size...'}</span>
+                      </div>
+                    </div>
+                  )}
+"""
+          if text.count(old_ui) != 1:
+              raise SystemExit(f'Expected audio UI block once, found {text.count(old_ui)}')
+          text = text.replace(old_ui, new_ui, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Commit patched source
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "jjtrainingcenter-lang"
+          git config user.email "jjtrainingcenter@gmail.com"
+          git add src/components/AdminDashboard.tsx
+          git commit -m "feat: show Firebase audio upload progress"
+          git push origin HEAD:chatgpt/audio-upload-progress
