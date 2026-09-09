@@ -5,7 +5,9 @@ import type { Plugin } from 'vite';
  *
  * 1) Admin assignment UI lists any existing non-archived test, including drafts.
  * 2) Invalid candidate sessions are fully cleared back to the login page.
- * 3) Manage Tests exposes one common Listening audio link field for every test.
+ * 3) Manage Tests exposes one global pre-test audio sample link shared by all tests.
+ * 4) Edit Test opens Visual Builder by default while preserving rich data that the
+ *    visual controls do not expose (for example Speaking details and extra media).
  */
 export const studentAccessFixesPlugin = (): Plugin => ({
   name: 'jj-student-access-fixes',
@@ -39,6 +41,43 @@ export const studentAccessFixesPlugin = (): Plugin => ({
           `                <TestAudioLinkManager\n                  tests={allTests}\n                  onRefresh={refreshAllData}\n                  onStatus={setStatus}\n                />\n\n${testGridMarker}`,
         );
       }
+
+      // Editing should be visual-first. Keep JSON populated so the advanced tab
+      // remains available, but do not force an Admin into it.
+      next = next.replace(
+        `    // Rich imported tests must be edited in JSON Builder so no listening/speaking/media arrays are flattened.\n    setActiveTab('json-builder');\n    setStatus(\`Editing full test in JSON Builder: "\${testToEdit.title}" (ID: \${testToEdit.id})\`);`,
+        `    // Open the normal Visual Builder by default. JSON Builder remains available\n    // as an advanced option without being forced on every edit.\n    setActiveTab('visual-builder');\n    setStatus(\`Editing test in Visual Builder: "\${testToEdit.title}" (ID: \${testToEdit.id})\`);`,
+      );
+
+      // Preserve fields which are not represented by Visual Builder. The original
+      // test is already kept in jsonText by handleEditTest, so use it as the base
+      // and override only fields that the Admin can actually edit visually.
+      next = next.replace(
+        `    const spkMin = Number(testSpeakingTimer) || 14;\n\n    return {`,
+        `    const spkMin = Number(testSpeakingTimer) || 14;\n\n    let existingEditedTest: IELTSTest | null = null;\n    if (editingTestId && jsonText.trim()) {\n      try {\n        existingEditedTest = JSON.parse(jsonText) as IELTSTest;\n      } catch (error) {\n        console.warn('Could not read original test snapshot while saving Visual Builder edits', error);\n      }\n    }\n    const existingListeningData = existingEditedTest?.listeningData || [];\n    const existingWritingTask1 = existingEditedTest?.writingTasks?.find(task => task.taskNumber === 1);\n    const existingWritingTask2 = existingEditedTest?.writingTasks?.find(task => task.taskNumber === 2);\n\n    return {\n      ...(existingEditedTest || {}),`,
+      );
+
+      next = next.replace(
+        `      listeningData: [{ partNumber: 1, title: 'Listening Test', audioUrl: listeningAudioUrl, audioDuration: 0, instructions: '' }],`,
+        `      listeningData: existingListeningData.length > 0\n        ? existingListeningData.map((item, index) => index === 0\n          ? { ...item, audioUrl: listeningAudioUrl }\n          : item)\n        : [{ partNumber: 1, title: 'Listening Test', audioUrl: listeningAudioUrl, audioDuration: 0, instructions: '' }],`,
+      );
+
+      next = next.replace(
+        `        {\n          taskNumber: 1,`,
+        `        {\n          ...(existingWritingTask1 || {}),\n          taskNumber: 1,`,
+      );
+      next = next.replace(
+        `        {\n          taskNumber: 2,`,
+        `        {\n          ...(existingWritingTask2 || {}),\n          taskNumber: 2,`,
+      );
+      next = next.replace(
+        `      speakingTasks: [`,
+        `      speakingTasks: existingEditedTest?.speakingTasks?.length ? existingEditedTest.speakingTasks : [`,
+      );
+      next = next.replace(
+        `      createdAt: new Date().toISOString()`,
+        `      createdAt: existingEditedTest?.createdAt || new Date().toISOString()`,
+      );
 
       return { code: next, map: null };
     }
