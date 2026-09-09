@@ -28,6 +28,11 @@ if (isConfigured) {
   auth = getAuth(app);
   db = getFirestore(app);
   storage = getStorage(app);
+  // The SDK normally retries a failed upload for up to ~10 minutes. That made
+  // permission/billing/bucket problems look like a frozen 0% progress bar.
+  // Fail quickly so the Admin UI can show the actual Firebase error instead.
+  storage.maxUploadRetryTime = 20_000;
+  storage.maxOperationRetryTime = 10_000;
   googleProvider = new GoogleAuthProvider();
 }
 
