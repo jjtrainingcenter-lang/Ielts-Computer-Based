@@ -1,19 +1,47 @@
 import type { Plugin } from 'vite';
 
 /**
- * Small corrective transforms layered after the legacy candidate operations plugin.
+ * Corrective transforms layered after the legacy candidate operations plugin.
  *
- * 1) Admin assignment UI should list any existing non-archived test, including
- *    drafts, so an Admin can prepare assignments before publishing.
- * 2) When candidate/test access becomes invalid, fully clear the candidate
- *    session in-memory and in localStorage so reopening the site always lands
- *    on the login page instead of repeatedly restoring a stale exam session.
+ * 1) Admin assignment UI lists any existing non-archived test, including drafts.
+ * 2) Invalid candidate sessions are fully cleared back to the login page.
+ * 3) Manage Tests exposes one common Listening audio link field for every test.
  */
 export const studentAccessFixesPlugin = (): Plugin => ({
   name: 'jj-student-access-fixes',
   enforce: 'pre',
   transform(code, id) {
     const cleanId = id.split('?')[0].replace(/\\/g, '/');
+
+    if (cleanId.endsWith('/src/components/AdminDashboard.tsx')) {
+      let next = code;
+
+      if (!next.includes("import { TestAudioLinkManager } from './TestAudioLinkManager';")) {
+        const candidateManagerImport = "import { CandidateAccessManager } from './CandidateAccessManager';";
+        const validationImport = "import { ValidationReportModal } from './ValidationReportModal';";
+        if (next.includes(candidateManagerImport)) {
+          next = next.replace(
+            candidateManagerImport,
+            `${candidateManagerImport}\nimport { TestAudioLinkManager } from './TestAudioLinkManager';`,
+          );
+        } else if (next.includes(validationImport)) {
+          next = next.replace(
+            validationImport,
+            `${validationImport}\nimport { TestAudioLinkManager } from './TestAudioLinkManager';`,
+          );
+        }
+      }
+
+      const testGridMarker = `                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">\n                  {allTests.map(test => {`;
+      if (!next.includes('<TestAudioLinkManager') && next.includes(testGridMarker)) {
+        next = next.replace(
+          testGridMarker,
+          `                <TestAudioLinkManager\n                  tests={allTests}\n                  onRefresh={refreshAllData}\n                  onStatus={setStatus}\n                />\n\n${testGridMarker}`,
+        );
+      }
+
+      return { code: next, map: null };
+    }
 
     if (cleanId.endsWith('/src/components/CandidateAccessManager.tsx')) {
       let next = code;

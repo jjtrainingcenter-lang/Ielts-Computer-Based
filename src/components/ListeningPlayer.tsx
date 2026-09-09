@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ListeningSectionData } from '../types';
-import { Play, Pause, Volume2, VolumeX, AlertCircle, Loader2 } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, AlertCircle, Loader2, Lock } from 'lucide-react';
 import { getGoogleDrivePreviewUrl, getMediaUrlCandidates, isGoogleDriveUrl } from '../lib/mediaUrls';
 
 interface ListeningPlayerProps {
@@ -22,6 +22,8 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
   const [showDriveFallback, setShowDriveFallback] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastAllowedTimeRef = useRef(0);
+  const restoringSeekRef = useRef(false);
   const allowPause = true;
 
   const audioCandidates = useMemo(
@@ -46,6 +48,8 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
     setCandidateIndex(0);
     setShowDriveFallback(false);
     setDuration(partData.audioDuration || 0);
+    lastAllowedTimeRef.current = 0;
+    restoringSeekRef.current = false;
   }, [partData.audioUrl, partData.audioDuration]);
 
   useEffect(() => {
@@ -62,7 +66,32 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
   }, [masterVolume, isMuted]);
 
   const handleTimeUpdate = () => {
-    if (audioRef.current) setProgressSeconds(audioRef.current.currentTime);
+    if (!audioRef.current) return;
+    const current = audioRef.current.currentTime;
+    lastAllowedTimeRef.current = current;
+    setProgressSeconds(current);
+  };
+
+  // IELTS-style locked playback: the candidate may listen/pause, but cannot
+  // drag, jump, rewind, fast-forward, change playback rate, or seek by keyboard.
+  const handleSeeking = () => {
+    const audio = audioRef.current;
+    if (!audio || restoringSeekRef.current) return;
+    const allowed = lastAllowedTimeRef.current;
+    if (Math.abs(audio.currentTime - allowed) > 0.35) {
+      restoringSeekRef.current = true;
+      audio.currentTime = allowed;
+      setProgressSeconds(allowed);
+      window.setTimeout(() => {
+        restoringSeekRef.current = false;
+      }, 0);
+    }
+  };
+
+  const enforceNormalSpeed = () => {
+    if (audioRef.current && audioRef.current.playbackRate !== 1) {
+      audioRef.current.playbackRate = 1;
+    }
   };
 
   const handleLoadedMetadata = () => {
@@ -70,6 +99,7 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
     setAudioError(false);
     if (audioRef.current && Number.isFinite(audioRef.current.duration)) {
       setDuration(audioRef.current.duration);
+      audioRef.current.playbackRate = 1;
     }
 
     if (!hasStarted) attemptPlay();
@@ -77,6 +107,7 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
 
   const attemptPlay = () => {
     if (!audioRef.current || isCompleted || !resolvedAudioUrl) return;
+    audioRef.current.playbackRate = 1;
 
     const playPromise = audioRef.current.play();
     if (playPromise !== undefined) {
@@ -146,10 +177,15 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
           ref={audioRef}
           src={resolvedAudioUrl}
           onTimeUpdate={handleTimeUpdate}
+          onSeeking={handleSeeking}
+          onRateChange={enforceNormalSpeed}
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={handleEnded}
           onError={handleError}
           preload="metadata"
+          controls={false}
+          controlsList="nodownload noplaybackrate noremoteplayback"
+          disablePictureInPicture
         />
       )}
 
@@ -162,6 +198,10 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
             <div className="flex-1 overflow-hidden">
               <span className="text-[10px] uppercase font-bold text-blue-200 tracking-wider block">Audio Recording</span>
               <h3 className="text-sm font-semibold text-white truncate" title={partData.title}>{partData.title}</h3>
+              <div className="flex items-center gap-1 text-[9px] text-blue-200 mt-0.5">
+                <Lock className="w-2.5 h-2.5" />
+                <span>Seeking locked — no forward or rewind</span>
+              </div>
             </div>
           </div>
 
@@ -195,8 +235,11 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
                   <span>{formatTime(progressSeconds)}</span>
                   <span>{formatTime(duration)}</span>
                 </div>
-                <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden relative">
-                  <div className="h-full bg-blue-500 rounded-full transition-all duration-300 ease-linear" style={{ width: `${progressPercent}%` }} />
+                <div
+                  className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden relative cursor-not-allowed"
+                  title="Audio seeking is disabled during the test"
+                >
+                  <div className="h-full bg-blue-500 rounded-full transition-all duration-300 ease-linear pointer-events-none" style={{ width: `${progressPercent}%` }} />
                 </div>
               </div>
             </div>
@@ -229,15 +272,23 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
 
         {showDriveFallback && drivePreviewUrl && (
           <div className="bg-white rounded-lg overflow-hidden border border-white/20">
-            <div className="px-3 py-2 bg-amber-50 text-amber-900 text-xs font-semibold border-b border-amber-200">
-              Google Drive direct streaming was blocked, so the Drive player is being used. Make sure the file is shared as “Anyone with the link”.
+            <div className="px-3 py-2 bg-amber-50 text-amber-900 text-xs font-semibold border-b border-amber-200 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" />
+              Google Drive fallback player. The seek/timeline area is locked for candidates. Make sure the file is shared as “Anyone with the link”.
             </div>
-            <iframe
-              src={drivePreviewUrl}
-              title={`${partData.title} Google Drive audio`}
-              className="w-full h-[96px] border-0 bg-white"
-              allow="autoplay"
-            />
+            <div className="relative h-[96px] bg-white">
+              <iframe
+                src={drivePreviewUrl}
+                title={`${partData.title} Google Drive audio`}
+                className="w-full h-[96px] border-0 bg-white"
+                allow="autoplay"
+              />
+              <div
+                className="absolute left-[68px] right-[72px] bottom-0 h-[48px] z-10 cursor-not-allowed"
+                title="Seeking is disabled during the test"
+                aria-hidden="true"
+              />
+            </div>
           </div>
         )}
       </div>
