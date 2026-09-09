@@ -28,11 +28,6 @@ export const studentAccessFixesPlugin = (): Plugin => ({
         "                    <div className=\"flex items-center gap-2 mt-0.5\">\n                      <div className=\"text-[10px] text-slate-500 font-mono\">{test.id}</div>\n                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${test.status === 'draft' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>\n                        {test.status || 'published'}\n                      </span>\n                    </div>",
       );
 
-      next = next.replace(
-        "            })}\n          </div>\n        </div>\n      </div>",
-        "            })}\n            {publishedTests.length === 0 && (\n              <div className=\"p-4 text-xs text-slate-400 text-center\">No active or draft tests are available to assign.</div>\n            )}\n          </div>\n        </div>\n      </div>",
-      );
-
       return { code: next, map: null };
     }
 
