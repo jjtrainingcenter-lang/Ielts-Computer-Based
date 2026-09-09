@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Candidate, IELTSTest } from '../types';
 import { getAssignedTestsForCandidate, getCandidates } from '../lib/candidateStorage';
 import { signInWithGoogle, isConfigured } from '../lib/firebase';
-import { ShieldCheck, User, Calendar, LogIn, Lock, Sparkles, AlertCircle, Info, ChevronRight } from 'lucide-react';
+import { ShieldCheck, Calendar, LogIn, Lock, AlertCircle } from 'lucide-react';
 
 interface LoginScreenProps {
   onCandidateLogin: (candidate: Candidate, assignedTests: IELTSTest[]) => void;
@@ -38,9 +38,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
 
     try {
       const { candidate, tests } = await getAssignedTestsForCandidate(cleanId, dob);
-      
+
       if (!candidate) {
-        // Check if regId exists with different DOB
         const allCandidates = await getCandidates();
         const foundById = allCandidates.find(c => c.id.trim() === cleanId);
         if (foundById) {
@@ -73,9 +72,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
       if (user && user.email === 'jjtrainingcenter@gmail.com') {
         onAdminLogin();
       } else if (user) {
-        // Also allow other authenticated users as admin if needed, 
-        // or restrict it strictly to specific emails. 
-        // For now, logging them in.
         onAdminLogin();
       }
     } catch (err: any) {
@@ -98,18 +94,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
     }
   };
 
-  // Quick filler for testing/demo
-  const handleQuickFill = (id: string, birth: string) => {
-    setRegId(id);
-    setDob(birth);
-    setError('');
-  };
-
   return (
     <div className="min-h-screen bg-[#f0f4f8] flex flex-col items-center justify-center p-4 relative font-sans select-none">
       <div className="bg-white p-8 sm:p-10 rounded-2xl shadow-xl w-full max-w-lg border-t-8 border-[#214162] relative overflow-hidden">
-        
-        {/* Top Header */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 rounded-xl bg-[#214162] text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
             JJ
@@ -133,7 +120,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
         </div>
 
         {isAdminMode ? (
-          /* Admin Login Options */
           <div className="space-y-4">
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2 font-medium">
@@ -195,7 +181,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
             </button>
           </div>
         ) : (
-          /* Candidate 6-Digit Reg Number & DOB Form */
           <form onSubmit={handleUserLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
@@ -248,38 +233,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
               <LogIn className="w-4 h-4" />
               <span>{isLoading ? 'Verifying Registration...' : 'Login & Access Assigned Tests'}</span>
             </button>
-
-            {/* Quick Demo Candidates Helper */}
-            <div className="pt-4 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-500" /> Demo Candidate Accounts:
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('123456', '2001-05-14')}
-                  className="text-left p-2 rounded bg-slate-100 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 transition-colors"
-                >
-                  <p className="font-bold text-slate-800 truncate">Sarah Jenkins (2 Tests)</p>
-                  <p className="font-mono text-[10px] text-blue-700">Reg: 123456 • 2001-05-14</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('492018', '1999-03-30')}
-                  className="text-left p-2 rounded bg-slate-100 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 transition-colors"
-                >
-                  <p className="font-bold text-slate-800 truncate">Emily Watson (3 Tests)</p>
-                  <p className="font-mono text-[10px] text-blue-700">Reg: 492018 • 1999-03-30</p>
-                </button>
-              </div>
-            </div>
           </form>
         )}
       </div>
 
-      {/* Admin Switcher Button at bottom */}
       {!isAdminMode && (
         <button
           onClick={() => { setIsAdminMode(true); setError(''); }}
