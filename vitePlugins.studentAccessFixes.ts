@@ -11,7 +11,7 @@ import type { Plugin } from 'vite';
  */
 export const studentAccessFixesPlugin = (): Plugin => ({
   name: 'jj-student-access-fixes',
-  enforce: 'post',
+  enforce: 'pre',
   transform(code, id) {
     const cleanId = id.split('?')[0].replace(/\\/g, '/');
 
