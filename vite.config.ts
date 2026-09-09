@@ -9,6 +9,7 @@ import {
   removeDemoCandidateLoginPlugin,
 } from './vitePlugins';
 import { studentAccessFixesPlugin } from './vitePlugins.studentAccessFixes';
+import { mockTestCatalogPlugin } from './vitePlugins.mockTestCatalog';
 
 export default defineConfig(() => ({
   plugins: [
@@ -19,6 +20,7 @@ export default defineConfig(() => ({
     react(),
     tailwindcss(),
     studentAccessFixesPlugin(),
+    mockTestCatalogPlugin(),
   ],
   resolve: {
     alias: {
