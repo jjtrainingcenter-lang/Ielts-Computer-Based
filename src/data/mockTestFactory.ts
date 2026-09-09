@@ -1,4 +1,4 @@
-import { Question, TestSection } from '../types';
+import { Question, QuestionType, TestSection } from '../types';
 
 type GroupSpec = {
   start: number;
@@ -7,10 +7,14 @@ type GroupSpec = {
   instruction: string;
   /** Text transcribed from the supplied original question page. */
   sourceText?: string;
-  /** Optional media hook retained for tests that use a real hosted image. */
+  /** Optional original question-page image. */
   imageUrl?: string;
   passageId?: string;
   partNumber?: number;
+  /** Optional override so a source page can keep the exact IELTS interaction type. */
+  questionType?: QuestionType;
+  /** Restrict letter choices to the range actually printed on the source page. */
+  optionValues?: string[];
 };
 
 const UPPER_LETTERS = 'ABCDEFGHIJKL'.split('').map(value => ({ value, label: value }));
@@ -19,7 +23,7 @@ const ROMAN = ['i','ii','iii','iv','v','vi','vii','viii'].map(value => ({ value,
 const TFNG = ['TRUE','FALSE','NOT GIVEN'].map(value => ({ value, label: value }));
 const YNNG = ['YES','NO','NOT GIVEN'].map(value => ({ value, label: value }));
 
-const classify = (answer: string): { type: string; options?: { value: string; label: string }[] } => {
+const classify = (answer: string): { type: QuestionType; options?: { value: string; label: string }[] } => {
   const alternatives = answer.split('|').map(v => v.trim()).filter(Boolean);
   if (alternatives.every(v => ['TRUE','FALSE','NOT GIVEN'].includes(v))) return { type: 'true-false-not-given', options: TFNG };
   if (alternatives.every(v => ['YES','NO','NOT GIVEN'].includes(v))) return { type: 'yes-no-not-given', options: YNNG };
@@ -36,30 +40,42 @@ export const buildOfficialQuestions = (
   groups: GroupSpec[],
 ): Question[] => {
   if (answers.length !== 40) throw new Error(`Practice Test ${testNumber} ${section} answer key must contain exactly 40 answers.`);
+
   return answers.map((correctAnswer, index) => {
     const questionNumber = index + 1;
     const group = groups.find(item => questionNumber >= item.start && questionNumber <= item.end);
     if (!group) throw new Error(`Missing group metadata for Practice Test ${testNumber} ${section} Question ${questionNumber}.`);
-    const display = classify(correctAnswer);
+
+    const inferred = classify(correctAnswer);
     const isFirst = questionNumber === group.start;
     const groupInstruction = isFirst
       ? [group.instruction, group.sourceText].filter(Boolean).join('\n\n')
       : undefined;
+    const options = group.optionValues
+      ? group.optionValues.map(value => ({ value, label: value }))
+      : inferred.options;
 
     return {
       id: `t${testNumber}-${section.charAt(0)}${questionNumber}`,
       section,
       questionNumber,
       questionText: '',
-      type: display.type,
-      options: display.options,
+      type: group.questionType ?? inferred.type,
+      options,
       correctAnswer,
       explanation: `Official IELTS Upgrade Academic Practice Test ${testNumber} answer key.`,
       partNumber: group.partNumber ?? Math.ceil(questionNumber / 10),
       passageId: group.passageId,
       groupId: group.groupId,
       groupInstruction,
-      groupMedia: isFirst && group.imageUrl ? { type: 'image', url: group.imageUrl, alt: `Practice Test ${testNumber} ${section} source page`, zoomable: true } : undefined,
+      groupMedia: isFirst && group.imageUrl
+        ? {
+            type: 'image',
+            url: group.imageUrl,
+            alt: `Practice Test ${testNumber} ${section} source page`,
+            zoomable: true,
+          }
+        : undefined,
     };
   });
 };
