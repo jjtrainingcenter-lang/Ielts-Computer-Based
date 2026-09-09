@@ -1,7 +1,7 @@
 import { Candidate, IELTSTest, CandidateTestResult } from '../types';
 import { ACADEMIC_TEST_1 } from '../data/mockTests';
 import { db, isConfigured } from './firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, getDoc, onSnapshot } from 'firebase/firestore';
 
 const LOCAL_CANDIDATES_KEY = 'jj_cbt_candidates_v2';
 const LOCAL_CUSTOM_TESTS_KEY = 'jj_cbt_custom_tests_v2';
@@ -10,40 +10,10 @@ const LOCAL_CATALOG_RESET_KEY = 'jj_cbt_mock_test_1_catalog_reset_v1';
 const FIRESTORE_CATALOG_RESET_DOC = 'mock-test-1-catalog-reset-v1';
 export const SESSION_STORAGE_KEY = 'jj_cbt_active_session_v2';
 
-export const DEFAULT_CANDIDATES: Candidate[] = [
-  {
-    id: '123456',
-    name: 'Sarah Jenkins',
-    dob: '2001-05-14',
-    assignedTestIds: [ACADEMIC_TEST_1.id],
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '884920',
-    name: 'Rahul Sharma',
-    dob: '1998-11-23',
-    assignedTestIds: [ACADEMIC_TEST_1.id],
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '654321',
-    name: 'David Chen',
-    dob: '2002-08-09',
-    assignedTestIds: [ACADEMIC_TEST_1.id],
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '492018',
-    name: 'Emily Watson',
-    dob: '1999-03-30',
-    assignedTestIds: [ACADEMIC_TEST_1.id],
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-];
+// No demo candidates are seeded. When Firebase is configured, Firestore is the
+// source of truth so a candidate deleted by an Admin cannot be recreated by a
+// stale browser cache on another device.
+export const DEFAULT_CANDIDATES: Candidate[] = [];
 
 export const generateUniqueRegNumber = (existingCandidates: Candidate[]): string => {
   const existingIds = new Set(existingCandidates.map(c => c.id.trim()));
@@ -99,85 +69,91 @@ const ensureInitialCloudCatalog = async () => {
   }
 };
 
-export const getCandidates = async (): Promise<Candidate[]> => {
-  let localCandidates: Candidate[] = [];
-
+const readLocalCandidates = (): Candidate[] => {
   try {
     const raw = localStorage.getItem(LOCAL_CANDIDATES_KEY);
-    if (raw) localCandidates = JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   } catch (e) {
     console.error('Error reading local candidates', e);
+    return [];
   }
+};
 
-  if (localCandidates.length === 0) {
-    localCandidates = [...DEFAULT_CANDIDATES];
-    localStorage.setItem(LOCAL_CANDIDATES_KEY, JSON.stringify(localCandidates));
+const cacheLocalCandidates = (candidates: Candidate[]) => {
+  try {
+    localStorage.setItem(LOCAL_CANDIDATES_KEY, JSON.stringify(candidates));
+  } catch (e) {
+    console.warn('Could not cache candidates locally', e);
   }
+};
 
+export const getCandidates = async (): Promise<Candidate[]> => {
+  // Firestore is authoritative whenever it is available. This prevents deleted
+  // candidates from being resurrected by stale localStorage on another device.
   if (isConfigured && db) {
     try {
       const snap = await getDocs(collection(db, 'candidates'));
-      if (!snap.empty) {
-        const cloudCandidates = snap.docs.map(d => ({ id: d.id, ...d.data() } as Candidate));
-        const mergedMap = new Map<string, Candidate>();
-        localCandidates.forEach(c => mergedMap.set(c.id, c));
-        cloudCandidates.forEach(c => mergedMap.set(c.id, c));
-        const merged = Array.from(mergedMap.values());
-        localStorage.setItem(LOCAL_CANDIDATES_KEY, JSON.stringify(merged));
-
-        const cloudIds = new Set(cloudCandidates.map(c => c.id));
-        for (const candidate of localCandidates) {
-          if (!cloudIds.has(candidate.id)) {
-            try {
-              await setDoc(doc(db, 'candidates', candidate.id), candidate);
-            } catch (e) {}
-          }
-        }
-        return merged;
-      }
-
-      for (const candidate of localCandidates) {
-        try {
-          await setDoc(doc(db, 'candidates', candidate.id), candidate);
-        } catch (e) {}
-      }
+      const cloudCandidates = snap.docs.map(d => ({ id: d.id, ...d.data() } as Candidate));
+      cacheLocalCandidates(cloudCandidates);
+      return cloudCandidates;
     } catch (e) {
-      console.warn('Could not sync with Firestore candidates', e);
+      console.warn('Could not read Firestore candidates; using local cache', e);
     }
   }
 
-  return localCandidates;
+  return readLocalCandidates();
 };
 
 export const saveCandidate = async (candidate: Candidate): Promise<void> => {
-  const current = await getCandidates();
-  const index = current.findIndex(c => c.id === candidate.id);
+  const normalized: Candidate = {
+    ...candidate,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const current = readLocalCandidates();
+  const index = current.findIndex(c => c.id === normalized.id);
   const updated = [...current];
 
-  if (index >= 0) updated[index] = candidate;
-  else updated.unshift(candidate);
+  if (index >= 0) updated[index] = normalized;
+  else updated.unshift(normalized);
 
-  localStorage.setItem(LOCAL_CANDIDATES_KEY, JSON.stringify(updated));
+  cacheLocalCandidates(updated);
 
   if (isConfigured && db) {
     try {
-      await setDoc(doc(db, 'candidates', candidate.id), candidate);
+      await setDoc(doc(db, 'candidates', normalized.id), normalized);
     } catch (e) {
       console.error('Error writing candidate to Firestore', e);
+      throw e;
     }
+  }
+};
+
+export const saveCandidatesBulk = async (candidates: Candidate[]): Promise<void> => {
+  if (candidates.length === 0) return;
+  const now = new Date().toISOString();
+  const normalized = candidates.map(candidate => ({ ...candidate, updatedAt: now }));
+  const map = new Map(readLocalCandidates().map(candidate => [candidate.id, candidate]));
+  normalized.forEach(candidate => map.set(candidate.id, candidate));
+  cacheLocalCandidates(Array.from(map.values()));
+
+  if (isConfigured && db) {
+    await Promise.all(
+      normalized.map(candidate => setDoc(doc(db!, 'candidates', candidate.id), candidate)),
+    );
   }
 };
 
 export const deleteCandidate = async (candidateId: string): Promise<void> => {
-  const current = await getCandidates();
-  const updated = current.filter(c => c.id !== candidateId);
-  localStorage.setItem(LOCAL_CANDIDATES_KEY, JSON.stringify(updated));
+  const updated = readLocalCandidates().filter(c => c.id !== candidateId);
+  cacheLocalCandidates(updated);
 
   if (isConfigured && db) {
     try {
       await deleteDoc(doc(db, 'candidates', candidateId));
     } catch (e) {
       console.error('Error deleting candidate from Firestore', e);
+      throw e;
     }
   }
 };
@@ -186,9 +162,26 @@ export const getAllTests = async (): Promise<IELTSTest[]> => {
   resetLocalCatalogOnce();
   await ensureInitialCloudCatalog();
 
+  // Like candidates, the cloud collection is authoritative when available so
+  // publish/unpublish, deletions, Drive URLs and edited content propagate to all
+  // student devices instead of being shadowed by stale browser data.
+  if (isConfigured && db) {
+    try {
+      const snap = await getDocs(collection(db, 'tests'));
+      const cloudTests = snap.docs.map(testDoc => {
+        const data = testDoc.data() as IELTSTest;
+        return { ...data, id: data.id || testDoc.id };
+      });
+      const customTests = cloudTests.filter(test => test.id !== ACADEMIC_TEST_1.id);
+      localStorage.setItem(LOCAL_CUSTOM_TESTS_KEY, JSON.stringify(customTests));
+      return cloudTests.length > 0 ? cloudTests : [ACADEMIC_TEST_1];
+    } catch (e) {
+      console.warn('Could not sync with Firestore tests; using local cache', e);
+    }
+  }
+
   const testMap = new Map<string, IELTSTest>();
   testMap.set(ACADEMIC_TEST_1.id, ACADEMIC_TEST_1);
-
   try {
     const raw = localStorage.getItem(LOCAL_CUSTOM_TESTS_KEY);
     if (raw) {
@@ -198,40 +191,30 @@ export const getAllTests = async (): Promise<IELTSTest[]> => {
   } catch (e) {
     console.error('Error parsing custom tests', e);
   }
-
-  if (isConfigured && db) {
-    try {
-      const snap = await getDocs(collection(db, 'tests'));
-      snap.docs.forEach(testDoc => {
-        const data = testDoc.data() as IELTSTest;
-        testMap.set(data.id || testDoc.id, { ...data, id: data.id || testDoc.id });
-      });
-    } catch (e) {
-      console.warn('Could not sync with Firestore tests', e);
-    }
-  }
-
-  const tests = Array.from(testMap.values());
-  const customTests = tests.filter(test => test.id !== ACADEMIC_TEST_1.id);
-  localStorage.setItem(LOCAL_CUSTOM_TESTS_KEY, JSON.stringify(customTests));
-  return tests;
+  return Array.from(testMap.values());
 };
 
 export const saveTest = async (test: IELTSTest): Promise<void> => {
+  const normalized: IELTSTest = {
+    ...test,
+    updatedAt: new Date().toISOString(),
+  };
+
   const raw = localStorage.getItem(LOCAL_CUSTOM_TESTS_KEY);
   const customList: IELTSTest[] = raw ? JSON.parse(raw) : [];
-  const index = customList.findIndex(t => t.id === test.id);
+  const index = customList.findIndex(t => t.id === normalized.id);
 
-  if (index >= 0) customList[index] = test;
-  else customList.push(test);
+  if (index >= 0) customList[index] = normalized;
+  else if (normalized.id !== ACADEMIC_TEST_1.id) customList.push(normalized);
 
   localStorage.setItem(LOCAL_CUSTOM_TESTS_KEY, JSON.stringify(customList));
 
   if (isConfigured && db) {
     try {
-      await setDoc(doc(db, 'tests', test.id), test);
+      await setDoc(doc(db, 'tests', normalized.id), normalized);
     } catch (e) {
       console.error('Error saving test to Firestore', e);
+      throw e;
     }
   }
 };
@@ -251,8 +234,17 @@ export const deleteTest = async (testId: string): Promise<void> => {
       await deleteDoc(doc(db, 'tests', testId));
     } catch (e) {
       console.error('Error deleting test from Firestore', e);
+      throw e;
     }
   }
+};
+
+export const isTestAssignedToCandidate = (candidate: Candidate, test: IELTSTest): boolean => {
+  if (test.status && test.status !== 'published') return false;
+  if (test.assignedToAll) return true;
+  if (candidate.assignedTestIds?.includes(test.id)) return true;
+  if (test.allowedCandidateIds?.includes(candidate.id)) return true;
+  return false;
 };
 
 export const getAssignedTestsForCandidate = async (
@@ -267,17 +259,72 @@ export const getAssignedTestsForCandidate = async (
       (!candidateDob || c.dob.trim() === candidateDob.trim()),
   );
 
-  if (!foundCandidate) return { candidate: null, tests: [] };
+  if (!foundCandidate || foundCandidate.status === 'blocked') {
+    return { candidate: foundCandidate || null, tests: [] };
+  }
 
-  const assigned = allTests.filter(test => {
-    if (test.status && test.status !== 'published') return false;
-    if (test.assignedToAll) return true;
-    if (foundCandidate.assignedTestIds?.includes(test.id)) return true;
-    if (test.allowedCandidateIds?.includes(foundCandidate.id)) return true;
-    return false;
-  });
+  return {
+    candidate: foundCandidate,
+    tests: allTests.filter(test => isTestAssignedToCandidate(foundCandidate, test)),
+  };
+};
 
-  return { candidate: foundCandidate, tests: assigned };
+export const subscribeToCandidate = (
+  candidateId: string,
+  onChange: (candidate: Candidate | null) => void,
+): (() => void) => {
+  if (isConfigured && db) {
+    return onSnapshot(
+      doc(db, 'candidates', candidateId),
+      snapshot => {
+        onChange(snapshot.exists() ? ({ id: snapshot.id, ...snapshot.data() } as Candidate) : null);
+      },
+      error => console.error('Candidate live-sync failed', error),
+    );
+  }
+
+  let cancelled = false;
+  const poll = () => {
+    if (cancelled) return;
+    const candidate = readLocalCandidates().find(item => item.id === candidateId) || null;
+    onChange(candidate);
+  };
+  poll();
+  const timer = window.setInterval(poll, 5000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
+};
+
+export const subscribeToTests = (
+  onChange: (tests: IELTSTest[]) => void,
+): (() => void) => {
+  if (isConfigured && db) {
+    return onSnapshot(
+      collection(db, 'tests'),
+      snapshot => {
+        const tests = snapshot.docs.map(testDoc => {
+          const data = testDoc.data() as IELTSTest;
+          return { ...data, id: data.id || testDoc.id };
+        });
+        onChange(tests.length > 0 ? tests : [ACADEMIC_TEST_1]);
+      },
+      error => console.error('Test catalog live-sync failed', error),
+    );
+  }
+
+  let cancelled = false;
+  const poll = async () => {
+    if (cancelled) return;
+    onChange(await getAllTests());
+  };
+  poll();
+  const timer = window.setInterval(poll, 5000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
 };
 
 export const saveTestResult = async (result: CandidateTestResult): Promise<void> => {
@@ -366,19 +413,13 @@ export const getAllTestResults = async (): Promise<CandidateTestResult[]> => {
   if (isConfigured && db) {
     try {
       const snap = await getDocs(collection(db, 'results'));
-      if (!snap.empty) {
-        const cloudResults = snap.docs.map(
-          d => ({ id: d.id, ...d.data() } as CandidateTestResult),
-        );
-        const resultMap = new Map<string, CandidateTestResult>();
-        localResults.forEach(result => resultMap.set(result.id!, result));
-        cloudResults.forEach(result => resultMap.set(result.id!, result));
-        const merged = Array.from(resultMap.values()).sort(
-          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-        );
-        localStorage.setItem(LOCAL_RESULTS_KEY, JSON.stringify(merged));
-        return merged;
-      }
+      const cloudResults = snap.docs.map(
+        d => ({ id: d.id, ...d.data() } as CandidateTestResult),
+      );
+      localStorage.setItem(LOCAL_RESULTS_KEY, JSON.stringify(cloudResults));
+      return cloudResults.sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      );
     } catch (e) {
       console.error('Error fetching cloud results', e);
     }
@@ -387,6 +428,32 @@ export const getAllTestResults = async (): Promise<CandidateTestResult[]> => {
   return localResults.sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
+};
+
+export const grantCandidateRetake = async (
+  candidateId: string,
+  testId: string,
+  clearPreviousResults = false,
+): Promise<void> => {
+  const candidates = await getCandidates();
+  const candidate = candidates.find(item => item.id === candidateId);
+  if (!candidate) throw new Error(`Candidate #${candidateId} not found.`);
+
+  const resetAt = new Date().toISOString();
+  await saveCandidate({
+    ...candidate,
+    status: 'active',
+    attemptResetAt: {
+      ...(candidate.attemptResetAt || {}),
+      [testId]: resetAt,
+    },
+  });
+
+  if (clearPreviousResults) {
+    const results = await getAllTestResults();
+    const matching = results.filter(result => result.candidateId === candidateId && result.testId === testId && result.id);
+    await Promise.all(matching.map(result => deleteTestResult(result.id!)));
+  }
 };
 
 export const resolveSectionTimers = (

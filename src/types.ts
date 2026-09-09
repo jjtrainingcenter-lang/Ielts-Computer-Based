@@ -25,7 +25,7 @@ export type QuestionType =
   | 'dropdown'
   | 'writing-task'
   | 'speaking-task'
-  | string; // Fallback for unknown future types
+  | string;
 
 export interface QuestionOption {
   value: string;
@@ -35,7 +35,7 @@ export interface QuestionOption {
 export interface Question {
   id: string;
   section: TestSection;
-  questionNumber: number; // 1 to 40 for Reading/Listening
+  questionNumber: number;
   instruction?: string;
   questionText: string;
   imageUrl?: string;
@@ -45,12 +45,12 @@ export interface Question {
   zoomable?: boolean;
   type: QuestionType;
   options?: QuestionOption[];
-  correctAnswer: string | string[]; // for auto-scoring, can be array for multiple answers
+  correctAnswer: string | string[];
   explanation: string;
-  passageId?: string; // linkage to passage
-  partNumber?: number; // 1, 2, 3 or 4
-  groupId?: string; // for grouping questions together
-  groupInstruction?: string; // instruction for the group (e.g. Questions 21-25)
+  passageId?: string;
+  partNumber?: number;
+  groupId?: string;
+  groupInstruction?: string;
   groupMedia?: {
     type: 'image';
     url: string;
@@ -76,9 +76,9 @@ export interface ReadingPassage {
   id: string;
   title: string;
   subtitle?: string;
-  partNumber: number; // Passage 1, 2, or 3
+  partNumber: number;
   paragraphs: {
-    id: string; // 'A', 'B', 'C', etc.
+    id: string;
     type?: 'text' | 'image' | 'heading' | 'table';
     text?: string;
     imageUrl?: string;
@@ -90,11 +90,10 @@ export interface ReadingPassage {
 export interface ListeningSectionData {
   partNumber: number;
   title: string;
-  audioUrl?: string; // or speech synthesis fallback
-  audioDuration: number; // in seconds
+  audioUrl?: string;
+  audioDuration: number;
   transcript?: string;
   instructions: string;
-  // Image Support
   imageUrl?: string;
   imageAlt?: string;
   imageZoomable?: boolean;
@@ -137,22 +136,30 @@ export interface SpeakingTaskData {
 }
 
 export interface IELTSSectionTimers {
-  listening: number; // minutes
-  reading: number;   // minutes
-  writing: number;   // minutes
-  speaking: number;  // minutes
+  listening: number;
+  reading: number;
+  writing: number;
+  speaking: number;
 }
 
 export interface Candidate {
-  id: string; // 6-digit registration number e.g. "583921"
+  id: string;
   name: string;
-  dob: string; // "YYYY-MM-DD"
-  assignedTestIds: string[]; // List of test IDs assigned to this candidate
-  customTimers?: Partial<IELTSSectionTimers>; // Custom timer override per IELTS section (in minutes)
+  dob: string;
+  assignedTestIds: string[];
+  cohort?: string;
+  customTimers?: Partial<IELTSSectionTimers>;
   timerPreset?: 'standard' | 'extra25' | 'extra50' | 'rapid' | 'custom';
-  timeMultiplier?: number; // e.g. 1.0, 1.25, 1.5
+  timeMultiplier?: number;
   status?: 'active' | 'completed' | 'blocked';
+  /**
+   * Per-test reset marker written by Admin when a fresh attempt is granted.
+   * Candidate clients compare this timestamp with any locally saved exam session
+   * and discard stale work when the reset is newer.
+   */
+  attemptResetAt?: Record<string, string>;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CandidateTestResult {
@@ -162,6 +169,7 @@ export interface CandidateTestResult {
   candidateDob?: string;
   testId: string;
   testTitle?: string;
+  attemptNumber?: number;
   listeningScore: number;
   readingScore: number;
   userAnswers?: Record<string, string>;
@@ -189,7 +197,7 @@ export interface IELTSTest {
   module: 'academic' | 'general';
   description?: string;
   durationMinutes?: number;
-  sectionTimers?: IELTSSectionTimers; // Custom timer per section in minutes
+  sectionTimers?: IELTSSectionTimers;
   assignedToAll?: boolean;
   status?: 'draft' | 'published' | 'archived';
   allowedCandidateIds?: string[];
