@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Question, DisplaySettings } from '../types';
 import { ExamImageViewer } from './ExamImageViewer';
 
@@ -59,12 +59,37 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  const currentQuestion = questions?.[currentQuestionIndex];
+  const isReadingSet = currentQuestion?.section === 'reading';
+
+  // IELTS Reading is presented passage-by-passage. When the candidate is on a
+  // question from Passage 1, only that passage's questions are shown beside it;
+  // moving to the first question of Passage 2 automatically swaps to the next set.
+  const displayedQuestions = useMemo(() => {
+    if (!questions?.length || !isReadingSet || !currentQuestion) return questions || [];
+
+    const activePart = currentQuestion.partNumber;
+    const activePassageId = currentQuestion.passageId;
+
+    return questions.filter((q) => {
+      if (activePart != null && q.partNumber != null) return q.partNumber === activePart;
+      if (activePassageId) return q.passageId === activePassageId;
+      return true;
+    });
+  }, [questions, currentQuestion, isReadingSet]);
+
+  const displayedCurrentIndex = Math.max(
+    0,
+    displayedQuestions.findIndex((q) => q.id === currentQuestion?.id),
+  );
+
   useEffect(() => {
-    const targetRef = questionRefs.current[currentQuestionIndex];
+    questionRefs.current = [];
+    const targetRef = questionRefs.current[displayedCurrentIndex];
     if (targetRef && containerRef.current) {
       targetRef.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [currentQuestionIndex]);
+  }, [displayedCurrentIndex, displayedQuestions]);
 
   if (!questions || questions.length === 0) return null;
 
@@ -107,12 +132,33 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
     );
   };
 
+  const firstVisibleQuestion = displayedQuestions[0]?.questionNumber;
+  const lastVisibleQuestion = displayedQuestions[displayedQuestions.length - 1]?.questionNumber;
+
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">
+      {isReadingSet && displayedQuestions.length > 0 && (
+        <div className="shrink-0 px-8 py-3 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#214162]">
+                Reading Passage {currentQuestion?.partNumber || ''}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Answer Questions {firstVisibleQuestion}–{lastVisibleQuestion} for this passage.
+              </p>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-500 bg-white border border-slate-200 rounded px-2.5 py-1">
+              Questions {firstVisibleQuestion}–{lastVisibleQuestion}
+            </span>
+          </div>
+        </div>
+      )}
+
       <div ref={containerRef} className="p-8 flex flex-col gap-10 overflow-y-auto flex-1 ielts-scroll">
-        {questions.map((q, index) => {
+        {displayedQuestions.map((q, index) => {
           const currentAnswer = userAnswers[q.id] || '';
-          const prevQ = index > 0 ? questions[index - 1] : null;
+          const prevQ = index > 0 ? displayedQuestions[index - 1] : null;
           const isNewGroup = !!q.groupId && q.groupId !== prevQ?.groupId;
           const isNewInstruction = !!q.instruction && q.instruction !== prevQ?.instruction && !q.groupInstruction;
           const isSingleChoice = SINGLE_CHOICE_TYPES.has(q.type);

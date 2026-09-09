@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState } from 'react';
 import { ReadingPassage, HighlightItem, DisplaySettings } from '../types';
 import { ExamImageViewer } from './ExamImageViewer';
 import { TextHighlighterPopover } from './TextHighlighterPopover';
@@ -16,7 +16,6 @@ interface PassageViewerProps {
 export const PassageViewer: React.FC<PassageViewerProps> = ({
   passages,
   activePassageId,
-  onSelectPassage,
   highlights,
   onAddHighlight,
   onRemoveHighlight,
@@ -26,7 +25,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
   const passageRef = useRef<HTMLDivElement>(null);
   const [selectedText, setSelectedText] = useState('');
   const [popoverPos, setPopoverPos] = useState<{ x: number; y: number } | null>(null);
-  
+
   const handleMouseUp = () => {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) {
@@ -39,10 +38,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       setSelectedText(text);
-      setPopoverPos({
-        x: rect.left + rect.width / 2,
-        y: rect.top - 5,
-      });
+      setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 5 });
     }
   };
 
@@ -80,13 +76,11 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
       ? 'text-[16px]'
       : 'text-[15px]';
 
-  // Highlight rendering logic
   const renderHighlightedText = (text: string) => {
     if (!text) return null;
-    
-    // Filter highlights for this passage and sort by length descending to prevent shorter highlights from breaking longer ones
+
     const passageHighlights = highlights
-      .filter(h => h.passageId === currentPassage.id)
+      .filter((h) => h.passageId === currentPassage.id)
       .sort((a, b) => b.text.length - a.text.length);
     if (passageHighlights.length === 0) return text;
 
@@ -102,27 +96,27 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
 
         let remainingText = part.text;
         const searchStr = highlight.text.toLowerCase();
-        
+
         while (remainingText.length > 0) {
           const index = remainingText.toLowerCase().indexOf(searchStr);
           if (index === -1) {
             newParts.push({ text: remainingText, isHighlight: false, id: '', note: '' });
             break;
-          } else {
-            if (index > 0) {
-              newParts.push({ text: remainingText.slice(0, index), isHighlight: false, id: '', note: '' });
-            }
-            newParts.push({
-              text: remainingText.slice(index, index + highlight.text.length),
-              isHighlight: true,
-              id: highlight.id,
-              note: highlight.note || ''
-            });
-            remainingText = remainingText.slice(index + highlight.text.length);
           }
+
+          if (index > 0) {
+            newParts.push({ text: remainingText.slice(0, index), isHighlight: false, id: '', note: '' });
+          }
+          newParts.push({
+            text: remainingText.slice(index, index + highlight.text.length),
+            isHighlight: true,
+            id: highlight.id,
+            note: highlight.note || '',
+          });
+          remainingText = remainingText.slice(index + highlight.text.length);
         }
       });
-      parts = newParts.filter(p => p.text.length > 0);
+      parts = newParts.filter((p) => p.text.length > 0);
     });
 
     return (
@@ -138,7 +132,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
                     onRemoveHighlight(part.id);
                   }
                 }}
-                title={part.note || "Click to remove"}
+                title={part.note || 'Click to remove'}
               >
                 {part.text}
                 {part.note && (
@@ -157,17 +151,22 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-white relative">
-      {/* Main Passage Text Body */}
+      <div className="shrink-0 px-10 pt-5 pb-3 border-b border-slate-200 bg-slate-50">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#214162]">
+          Reading Passage {currentPassage.partNumber}
+        </p>
+        {currentPassage.subtitle && (
+          <p className="text-xs text-slate-500 mt-1">{currentPassage.subtitle}</p>
+        )}
+      </div>
+
       <div
         ref={passageRef}
         onMouseUp={handleMouseUp}
         className={`flex-1 overflow-y-auto px-10 py-8 space-y-6 ${fontClass} text-black selection:bg-[#2060b2] selection:text-white ielts-scroll`}
       >
-        <h3 className="text-xl font-bold text-black mb-4">
-          {currentPassage.title}
-        </h3>
-        
-        {/* Paragraphs */}
+        <h3 className="text-xl font-bold text-black mb-4">{currentPassage.title}</h3>
+
         <div className="space-y-4">
           {currentPassage.paragraphs.map((p, idx) => {
             if (p.type === 'image' && p.imageUrl) {
@@ -202,8 +201,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
           })}
         </div>
       </div>
-      
-      {/* Floating Text Highlighter Popover */}
+
       {popoverPos && (
         <TextHighlighterPopover
           x={popoverPos.x}
@@ -211,9 +209,9 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
           onHighlight={handleApplyHighlight}
           onAddNote={handleAddNote}
           onClose={() => {
-             setSelectedText('');
-             setPopoverPos(null);
-             window.getSelection()?.removeAllRanges();
+            setSelectedText('');
+            setPopoverPos(null);
+            window.getSelection()?.removeAllRanges();
           }}
         />
       )}
