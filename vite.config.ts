@@ -90,6 +90,78 @@ const mediaAndWritingUiPlugin = (): Plugin => ({
 });
 
 /**
+ * Adds institute-level candidate operations and student live synchronization
+ * without duplicating the very large legacy App/AdminDashboard source files.
+ */
+const candidateOperationsPlugin = (): Plugin => ({
+  name: 'jj-candidate-operations-and-live-sync',
+  enforce: 'pre',
+  transform(code, id) {
+    const cleanId = id.split('?')[0].replace(/\\/g, '/');
+
+    if (cleanId.endsWith('/src/components/AdminDashboard.tsx')) {
+      let next = code;
+      const mediaImport = "import { getMediaUrlCandidates } from '../lib/mediaUrls';";
+      if (next.includes(mediaImport) && !next.includes("import { CandidateAccessManager } from './CandidateAccessManager';")) {
+        next = next.replace(
+          mediaImport,
+          `${mediaImport}\nimport { CandidateAccessManager } from './CandidateAccessManager';`,
+        );
+      }
+
+      const listMarker = '              {/* Registered Candidates List */}';
+      if (!next.includes('<CandidateAccessManager') && next.includes(listMarker)) {
+        next = next.replace(
+          listMarker,
+          `              <CandidateAccessManager\n                candidates={candidatesList}\n                tests={allTests}\n                results={resultsList}\n                onRefresh={refreshAllData}\n                onStatus={setStatus}\n              />\n\n${listMarker}`,
+        );
+      }
+      return { code: next, map: null };
+    }
+
+    if (cleanId.endsWith('/src/App.tsx')) {
+      let next = code;
+
+      next = next.replace(
+        "  resolveSectionTimers,\n  SESSION_STORAGE_KEY\n} from './lib/candidateStorage';",
+        "  resolveSectionTimers,\n  SESSION_STORAGE_KEY,\n  subscribeToCandidate,\n  subscribeToTests,\n  isTestAssignedToCandidate\n} from './lib/candidateStorage';",
+      );
+
+      const liveSyncMarker = '  // Auto-persist active exam state to localStorage so candidate won\'t lose work on page reload';
+      if (!next.includes('Candidate/test live synchronization') && next.includes(liveSyncMarker)) {
+        const liveSync = `  // Candidate/test live synchronization. Admin changes now propagate to open\n  // student pages without requiring a manual refresh.\n  useEffect(() => {\n    if (!isLoggedIn || isAdminLoggedIn || !candidateId) return;\n\n    let exiting = false;\n    const forceCandidateExit = (message: string) => {\n      if (exiting) return;\n      exiting = true;\n      try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}\n      window.alert(message);\n      window.location.reload();\n    };\n\n    const unsubscribeCandidate = subscribeToCandidate(candidateId, (liveCandidate) => {\n      if (!liveCandidate) {\n        forceCandidateExit('Your candidate registration has been removed by the administrator. This exam session is now closed.');\n        return;\n      }\n      if (liveCandidate.status === 'blocked') {\n        forceCandidateExit('Your candidate access has been blocked by the administrator. This exam session is now closed.');\n        return;\n      }\n\n      setCandidate(liveCandidate);\n      setCandidateName(liveCandidate.name);\n      const liveAssigned = allAvailableTests.filter(test => isTestAssignedToCandidate(liveCandidate, test));\n      setAssignedTests(liveAssigned);\n\n      const resetAt = liveCandidate.attemptResetAt?.[currentTest.id];\n      const resetKey = 'jj_cbt_seen_reset_v1:' + candidateId + ':' + currentTest.id;\n      if (resetAt) {\n        const seenReset = localStorage.getItem(resetKey);\n        if (hasConfirmedInstructions && seenReset !== resetAt) {\n          localStorage.setItem(resetKey, resetAt);\n          forceCandidateExit('The administrator has reset this test and granted a fresh attempt. Please sign in again to start from the beginning.');\n          return;\n        }\n        if (!hasConfirmedInstructions && seenReset !== resetAt) {\n          localStorage.setItem(resetKey, resetAt);\n        }\n      }\n\n      if (hasConfirmedInstructions && currentTest.id && !isTestAssignedToCandidate(liveCandidate, currentTest)) {\n        forceCandidateExit('The administrator has removed your access to this test. This exam session is now closed.');\n      }\n    });\n\n    const unsubscribeTests = subscribeToTests((liveTests) => {\n      setAllAvailableTests(liveTests);\n      if (!candidate) return;\n\n      const liveAssigned = liveTests.filter(test => isTestAssignedToCandidate(candidate, test));\n      setAssignedTests(liveAssigned);\n      const latestCurrentTest = liveTests.find(test => test.id === currentTest.id);\n\n      if (latestCurrentTest && isTestAssignedToCandidate(candidate, latestCurrentTest)) {\n        // Pull in edited audio/image URLs, passages, questions, status and timers.\n        setCurrentTest(latestCurrentTest);\n      } else if (hasConfirmedInstructions) {\n        forceCandidateExit('This test was removed, unpublished, or unassigned by the administrator. This exam session is now closed.');\n      }\n    });\n\n    return () => {\n      unsubscribeCandidate();\n      unsubscribeTests();\n    };\n  }, [isLoggedIn, isAdminLoggedIn, candidateId, candidate, currentTest.id, hasConfirmedInstructions, allAvailableTests]);\n\n`;
+        next = next.replace(liveSyncMarker, liveSync + liveSyncMarker);
+      }
+
+      next = next.replace(
+        "  const handleStartTest = (test: IELTSTest, name: string, id: string, initialSec: TestSection = 'listening') => {\n    setCurrentTest(test);",
+        "  const handleStartTest = (test: IELTSTest, name: string, id: string, initialSec: TestSection = 'listening') => {\n    const resetKey = 'jj_cbt_seen_reset_v1:' + id + ':' + test.id;\n    const resetMarker = candidate?.attemptResetAt?.[test.id];\n    if (resetMarker) localStorage.setItem(resetKey, resetMarker);\n    else localStorage.removeItem(resetKey);\n    setCurrentTest(test);",
+      );
+
+      // Never fall back to the full catalog for an unassigned candidate.
+      next = next.replace(
+        'availableTests={assignedTests.length > 0 ? assignedTests : allAvailableTests}',
+        'availableTests={assignedTests}',
+      );
+
+      // AI grading is an administrator/examiner capability, not a student button.
+      next = next.replace(
+        '              onEvaluateAI={handleEvaluateWritingAI}\n              isEvaluatingAI={isEvaluatingAI}\n',
+        '',
+      );
+      next = next.replace(
+        '              onEvaluateAI={handleEvaluateSpeakingAI}\n              isEvaluatingAI={isEvaluatingAI}\n',
+        '',
+      );
+
+      return { code: next, map: null };
+    }
+
+    return null;
+  },
+});
+
+/**
  * AdminDashboard is a very large legacy component. This guarded pre-transform
  * adds upload diagnostics without duplicating the whole file here.
  */
@@ -173,6 +245,7 @@ export default defineConfig(() => {
     plugins: [
       removeDemoCandidateLoginPlugin(),
       mediaAndWritingUiPlugin(),
+      candidateOperationsPlugin(),
       adminAudioUploadProgressPlugin(),
       react(),
       tailwindcss(),
