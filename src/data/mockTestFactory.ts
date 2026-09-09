@@ -5,6 +5,9 @@ type GroupSpec = {
   end: number;
   groupId: string;
   instruction: string;
+  /** Text transcribed from the supplied original question page. */
+  sourceText?: string;
+  /** Optional media hook retained for tests that use a real hosted image. */
   imageUrl?: string;
   passageId?: string;
   partNumber?: number;
@@ -39,6 +42,10 @@ export const buildOfficialQuestions = (
     if (!group) throw new Error(`Missing group metadata for Practice Test ${testNumber} ${section} Question ${questionNumber}.`);
     const display = classify(correctAnswer);
     const isFirst = questionNumber === group.start;
+    const groupInstruction = isFirst
+      ? [group.instruction, group.sourceText].filter(Boolean).join('\n\n')
+      : undefined;
+
     return {
       id: `t${testNumber}-${section.charAt(0)}${questionNumber}`,
       section,
@@ -51,7 +58,7 @@ export const buildOfficialQuestions = (
       partNumber: group.partNumber ?? Math.ceil(questionNumber / 10),
       passageId: group.passageId,
       groupId: group.groupId,
-      groupInstruction: isFirst ? group.instruction : undefined,
+      groupInstruction,
       groupMedia: isFirst && group.imageUrl ? { type: 'image', url: group.imageUrl, alt: `Practice Test ${testNumber} ${section} source page`, zoomable: true } : undefined,
     };
   });
