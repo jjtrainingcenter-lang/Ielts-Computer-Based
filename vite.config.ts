@@ -13,11 +13,12 @@ const removeDemoCandidateLoginPlugin = (): Plugin => ({
     let next = code;
     next = next.replace(', Sparkles', '');
 
-    const quickFillBlock = `  // Quick filler for testing/demo\n  const handleQuickFill = (id: string, birth: string) => {\n    setRegId(id);\n    setDob(birth);\n    setError('');\n  };\n\n`;
-    if (!next.includes(quickFillBlock)) {
+    const helperStart = next.indexOf('  // Quick filler for testing/demo');
+    const helperEnd = next.indexOf('  return (', helperStart);
+    if (helperStart === -1 || helperEnd === -1) {
       throw new Error('Could not find demo quick-fill helper in LoginScreen.tsx');
     }
-    next = next.replace(quickFillBlock, '');
+    next = next.slice(0, helperStart) + next.slice(helperEnd);
 
     const demoStart = next.indexOf('            {/* Quick Demo Candidates Helper */}');
     const formEnd = next.indexOf('          </form>', demoStart);
@@ -33,15 +34,6 @@ const removeDemoCandidateLoginPlugin = (): Plugin => ({
 /**
  * AdminDashboard is a very large legacy component. This guarded pre-transform
  * adds upload diagnostics without duplicating the whole file here.
- *
- * The underlying uploader already uses Firebase uploadBytesResumable. We add:
- * - visible percentage progress
- * - Firebase-auth preflight for passcode-only admin sessions
- * - readable Storage error messages
- * - a short zero-byte stall detector instead of waiting many minutes
- *
- * Every replacement is guarded so a future dashboard change fails the build
- * rather than silently shipping a broken upload flow.
  */
 const adminAudioUploadProgressPlugin = (): Plugin => ({
   name: 'jj-admin-audio-upload-progress',
