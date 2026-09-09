@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ListeningSectionData } from '../types';
 import { Play, Pause, Volume2, VolumeX, AlertCircle, Loader2 } from 'lucide-react';
+import { getGoogleDrivePreviewUrl, getMediaUrlCandidates, isGoogleDriveUrl } from '../lib/mediaUrls';
 
 interface ListeningPlayerProps {
   partData: ListeningSectionData;
@@ -17,15 +18,24 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
   const [isBlocked, setIsBlocked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [audioError, setAudioError] = useState(false);
-  
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [showDriveFallback, setShowDriveFallback] = useState(false);
 
-  // In a real strict exam, pause might be disallowed. We'll use a hardcoded safe default for now,
-  // but it can be tied to test config later.
-  const allowPause = true; 
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const allowPause = true;
+
+  const audioCandidates = useMemo(
+    () => getMediaUrlCandidates(partData.audioUrl, 'audio'),
+    [partData.audioUrl],
+  );
+  const resolvedAudioUrl = audioCandidates[candidateIndex] || partData.audioUrl || '';
+  const drivePreviewUrl = useMemo(
+    () => getGoogleDrivePreviewUrl(partData.audioUrl),
+    [partData.audioUrl],
+  );
+  const hasDriveSource = isGoogleDriveUrl(partData.audioUrl);
 
   useEffect(() => {
-    // Reset state if partData changes
     setProgressSeconds(0);
     setHasStarted(false);
     setIsCompleted(false);
@@ -33,12 +43,17 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
     setIsBlocked(false);
     setAudioError(false);
     setIsLoading(true);
+    setCandidateIndex(0);
+    setShowDriveFallback(false);
+    setDuration(partData.audioDuration || 0);
+  }, [partData.audioUrl, partData.audioDuration]);
 
+  useEffect(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.load();
     }
-  }, [partData.audioUrl]);
+  }, [resolvedAudioUrl]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -47,26 +62,22 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
   }, [masterVolume, isMuted]);
 
   const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setProgressSeconds(audioRef.current.currentTime);
-    }
+    if (audioRef.current) setProgressSeconds(audioRef.current.currentTime);
   };
 
   const handleLoadedMetadata = () => {
     setIsLoading(false);
-    if (audioRef.current) {
+    setAudioError(false);
+    if (audioRef.current && Number.isFinite(audioRef.current.duration)) {
       setDuration(audioRef.current.duration);
     }
-    
-    // Attempt autoplay if not already started
-    if (!hasStarted) {
-      attemptPlay();
-    }
+
+    if (!hasStarted) attemptPlay();
   };
 
   const attemptPlay = () => {
-    if (!audioRef.current || isCompleted) return;
-    
+    if (!audioRef.current || isCompleted || !resolvedAudioUrl) return;
+
     const playPromise = audioRef.current.play();
     if (playPromise !== undefined) {
       playPromise
@@ -74,9 +85,10 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
           setIsPlaying(true);
           setHasStarted(true);
           setIsBlocked(false);
+          setAudioError(false);
         })
-        .catch(error => {
-          console.warn("Autoplay blocked by browser:", error);
+        .catch((error) => {
+          console.warn('Autoplay blocked or audio unavailable:', error);
           setIsBlocked(true);
           setIsLoading(false);
         });
@@ -85,7 +97,7 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
 
   const togglePlay = () => {
     if (!audioRef.current || isCompleted) return;
-    
+
     if (isPlaying) {
       if (!allowPause) return;
       audioRef.current.pause();
@@ -101,107 +113,133 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
   };
 
   const handleError = () => {
+    setIsPlaying(false);
     setIsLoading(false);
+
+    if (candidateIndex < audioCandidates.length - 1) {
+      setCandidateIndex((index) => index + 1);
+      setAudioError(false);
+      setIsLoading(true);
+      return;
+    }
+
+    if (hasDriveSource && drivePreviewUrl) {
+      setShowDriveFallback(true);
+    }
     setAudioError(true);
   };
 
   const formatTime = (secs: number) => {
-    if (!secs || isNaN(secs)) return "0:00";
+    if (!secs || isNaN(secs)) return '0:00';
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
   const progressPercent = duration > 0 ? Math.min(100, (progressSeconds / duration) * 100) : 0;
+  const noAudioConfigured = !partData.audioUrl?.trim();
 
   return (
     <div className="bg-[#214162] border-b border-[#1a334e] p-3 text-white shadow-md select-none shrink-0">
-      <audio
-        ref={audioRef}
-        src={partData.audioUrl} // If empty, handleError will fire
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onEnded={handleEnded}
-        onError={handleError}
-        preload="auto"
-      />
-      
-      <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Left Info */}
-        <div className="flex items-center space-x-3 w-full md:w-auto">
-          <div className="w-10 h-10 rounded bg-white/10 border border-white/20 flex items-center justify-center text-blue-300 shrink-0">
-            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <span className="text-[10px] uppercase font-bold text-blue-200 tracking-wider block">
-              Audio Recording
-            </span>
-            <h3 className="text-sm font-semibold text-white truncate" title={partData.title}>
-              {partData.title}
-            </h3>
-          </div>
-        </div>
+      {!showDriveFallback && (
+        <audio
+          ref={audioRef}
+          src={resolvedAudioUrl}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onEnded={handleEnded}
+          onError={handleError}
+          preload="metadata"
+        />
+      )}
 
-        {/* Center Player Controls */}
-        <div className="flex-1 max-w-lg w-full flex items-center space-x-4 bg-[#1a334e] px-4 py-2.5 rounded border border-white/15">
-          {isBlocked && !hasStarted ? (
-            <button
-              onClick={attemptPlay}
-              className="flex items-center space-x-2 bg-amber-500 hover:bg-amber-400 text-amber-950 px-4 py-1.5 rounded text-xs font-bold shadow-sm transition-colors animate-pulse"
-            >
-              <Play className="w-4 h-4" />
-              <span>START AUDIO</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={togglePlay}
-              disabled={isCompleted || isLoading || (!allowPause && isPlaying)}
-              className={`w-9 h-9 rounded flex items-center justify-center transition-transform shadow-xs shrink-0 ${
-                isCompleted || (!allowPause && isPlaying)
-                  ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95'
-              }`}
-            >
-              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-            </button>
+      <div className="max-w-5xl mx-auto flex flex-col gap-3">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center space-x-3 w-full md:w-auto">
+            <div className="w-10 h-10 rounded bg-white/10 border border-white/20 flex items-center justify-center text-blue-300 shrink-0">
+              {isLoading && !audioError ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <span className="text-[10px] uppercase font-bold text-blue-200 tracking-wider block">Audio Recording</span>
+              <h3 className="text-sm font-semibold text-white truncate" title={partData.title}>{partData.title}</h3>
+            </div>
+          </div>
+
+          {!showDriveFallback && (
+            <div className="flex-1 max-w-lg w-full flex items-center space-x-4 bg-[#1a334e] px-4 py-2.5 rounded border border-white/15">
+              {isBlocked && !hasStarted ? (
+                <button
+                  onClick={attemptPlay}
+                  className="flex items-center space-x-2 bg-amber-500 hover:bg-amber-400 text-amber-950 px-4 py-1.5 rounded text-xs font-bold shadow-sm transition-colors"
+                >
+                  <Play className="w-4 h-4" />
+                  <span>START AUDIO</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  disabled={isCompleted || isLoading || noAudioConfigured || audioError}
+                  className={`w-9 h-9 rounded flex items-center justify-center transition-transform shadow-xs shrink-0 ${
+                    isCompleted || isLoading || noAudioConfigured || audioError
+                      ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95'
+                  }`}
+                >
+                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                </button>
+              )}
+
+              <div className="flex-1 space-y-1.5">
+                <div className="flex justify-between text-[11px] font-mono font-bold text-gray-300">
+                  <span>{formatTime(progressSeconds)}</span>
+                  <span>{formatTime(duration)}</span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden relative">
+                  <div className="h-full bg-blue-500 rounded-full transition-all duration-300 ease-linear" style={{ width: `${progressPercent}%` }} />
+                </div>
+              </div>
+            </div>
           )}
 
-          <div className="flex-1 space-y-1.5">
-            <div className="flex justify-between text-[11px] font-mono font-bold text-gray-300">
-              <span>{formatTime(progressSeconds)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-            <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden relative">
-              <div
-                className="h-full bg-blue-500 rounded-full transition-all duration-300 ease-linear"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
+          <div className="flex items-center space-x-3 w-full md:w-auto justify-end">
+            {noAudioConfigured ? (
+              <div className="flex items-center space-x-1.5 text-amber-300 bg-amber-900/30 px-3 py-1.5 rounded border border-amber-500/30">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-xs font-bold">No audio attached</span>
+              </div>
+            ) : audioError && !showDriveFallback ? (
+              <div className="flex items-center space-x-1.5 text-red-400 bg-red-900/30 px-3 py-1.5 rounded border border-red-500/30">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-xs font-bold">Audio Unavailable</span>
+              </div>
+            ) : isCompleted ? (
+              <div className="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-3 py-1.5 rounded border border-emerald-500/30">Audio Completed</div>
+            ) : !showDriveFallback ? (
+              <button
+                onClick={() => setIsMuted(!isMuted)}
+                className="p-2 rounded text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+                title={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+              </button>
+            ) : null}
           </div>
         </div>
 
-        {/* Right Status */}
-        <div className="flex items-center space-x-3 w-full md:w-auto justify-end">
-          {audioError ? (
-            <div className="flex items-center space-x-1.5 text-red-400 bg-red-900/30 px-3 py-1.5 rounded border border-red-500/30">
-              <AlertCircle className="w-4 h-4" />
-              <span className="text-xs font-bold">Audio Unavailable</span>
+        {showDriveFallback && drivePreviewUrl && (
+          <div className="bg-white rounded-lg overflow-hidden border border-white/20">
+            <div className="px-3 py-2 bg-amber-50 text-amber-900 text-xs font-semibold border-b border-amber-200">
+              Google Drive direct streaming was blocked, so the Drive player is being used. Make sure the file is shared as “Anyone with the link”.
             </div>
-          ) : isCompleted ? (
-            <div className="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-3 py-1.5 rounded border border-emerald-500/30">
-              Audio Completed
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsMuted(!isMuted)}
-              className="p-2 rounded text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
-              title={isMuted ? "Unmute" : "Mute"}
-            >
-              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-            </button>
-          )}
-        </div>
+            <iframe
+              src={drivePreviewUrl}
+              title={`${partData.title} Google Drive audio`}
+              className="w-full h-[96px] border-0 bg-white"
+              allow="autoplay"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
