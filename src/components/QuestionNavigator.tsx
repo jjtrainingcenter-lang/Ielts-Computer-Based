@@ -24,6 +24,38 @@ export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   
   const isMarked = markedQuestions[currentQuestion.id];
 
+  // Determine part boundaries for the Next button
+  const activePart = currentQuestion.partNumber;
+  const activePassageId = currentQuestion.passageId;
+
+  let lastInPartIndex = currentQuestionIndex;
+  let nextPartIndex = -1;
+
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const samePart = (activePart != null && q.partNumber != null)
+      ? q.partNumber === activePart
+      : (activePassageId ? q.passageId === activePassageId : true);
+    
+    if (samePart) {
+      if (i > lastInPartIndex) {
+        lastInPartIndex = i;
+      }
+    } else if (i > currentQuestionIndex && nextPartIndex === -1) {
+      nextPartIndex = i;
+    }
+  }
+
+  const isAtLastQuestionOfPart = currentQuestionIndex === lastInPartIndex;
+  const isLastQuestionOfTest = currentQuestionIndex === questions.length - 1;
+  const isNextDisabled = !isAtLastQuestionOfPart || isLastQuestionOfTest;
+
+  const handleNext = () => {
+    if (nextPartIndex !== -1) {
+      onSelectQuestion(nextPartIndex);
+    }
+  };
+
   return (
     <div className="bg-slate-50 border-t border-slate-300 p-4 shrink-0 flex flex-col space-y-4">
       {/* Navigation Buttons */}
@@ -50,8 +82,8 @@ export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
         </button>
 
         <button
-          disabled={currentQuestionIndex === questions.length - 1}
-          onClick={() => onSelectQuestion(currentQuestionIndex + 1)}
+          disabled={isNextDisabled}
+          onClick={handleNext}
           className="flex items-center space-x-2 px-6 py-2.5 bg-[#214162] hover:bg-[#1a334e] text-white font-bold text-sm rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <span>Next</span>
