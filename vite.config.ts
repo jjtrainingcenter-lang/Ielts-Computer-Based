@@ -8,6 +8,7 @@ import {
   mediaAndWritingUiPlugin,
   removeDemoCandidateLoginPlugin,
 } from './vitePlugins';
+import { studentAccessFixesPlugin } from './vitePlugins.studentAccessFixes';
 
 export default defineConfig(() => ({
   plugins: [
@@ -17,6 +18,7 @@ export default defineConfig(() => ({
     adminAudioUploadProgressPlugin(),
     react(),
     tailwindcss(),
+    studentAccessFixesPlugin(),
   ],
   resolve: {
     alias: {
