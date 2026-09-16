@@ -28,17 +28,58 @@ export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   
   const isMarked = markedQuestions[currentQuestion.id];
 
+  const activePart = currentQuestion.partNumber;
+  const activePassageId = currentQuestion.passageId;
+
+  const isSamePart = (q: Question) => {
+    return (activePart != null && q.partNumber != null)
+      ? q.partNumber === activePart
+      : (activePassageId ? q.passageId === activePassageId : true);
+  };
+
+  let nextPartIndex = -1;
+  for (let i = currentQuestionIndex + 1; i < questions.length; i++) {
+    if (!isSamePart(questions[i])) {
+      nextPartIndex = i;
+      break;
+    }
+  }
+
+  let prevPartIndex = -1;
+  let firstOfCurrentPart = currentQuestionIndex;
+  while (firstOfCurrentPart > 0 && isSamePart(questions[firstOfCurrentPart - 1])) {
+    firstOfCurrentPart--;
+  }
+
+  if (firstOfCurrentPart > 0) {
+    const prevPartQuestion = questions[firstOfCurrentPart - 1];
+    const prevPart = prevPartQuestion.partNumber;
+    const prevPassageId = prevPartQuestion.passageId;
+    
+    const isSameAsPrevPart = (q: Question) => {
+      return (prevPart != null && q.partNumber != null)
+        ? q.partNumber === prevPart
+        : (prevPassageId ? q.passageId === prevPassageId : true);
+    };
+
+    let firstOfPrevPart = firstOfCurrentPart - 1;
+    while (firstOfPrevPart > 0 && isSameAsPrevPart(questions[firstOfPrevPart - 1])) {
+      firstOfPrevPart--;
+    }
+    prevPartIndex = firstOfPrevPart;
+  }
+
   const handlePrev = () => {
-    if (currentQuestionIndex > 0) {
-      onSelectQuestion(currentQuestionIndex - 1);
+    if (prevPartIndex !== -1) {
+      onSelectQuestion(prevPartIndex);
     } else if (onPrevSection) {
       onPrevSection();
     }
   };
 
   const handleNext = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      onSelectQuestion(currentQuestionIndex + 1);
+    if (nextPartIndex !== -1) {
+      onSelectQuestion(nextPartIndex);
     } else if (onNextSection) {
       onNextSection();
     }
@@ -50,7 +91,7 @@ export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
       <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
         <button
           onClick={handlePrev}
-          disabled={currentQuestionIndex === 0 && !onPrevSection}
+          disabled={prevPartIndex === -1 && !onPrevSection}
           className="flex items-center space-x-2 px-6 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -71,7 +112,7 @@ export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
 
         <button
           onClick={handleNext}
-          disabled={currentQuestionIndex === questions.length - 1 && !onNextSection}
+          disabled={nextPartIndex === -1 && !onNextSection}
           className="flex items-center space-x-2 px-6 py-2.5 bg-[#214162] hover:bg-[#1a334e] text-white font-bold text-sm rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <span>Next</span>
