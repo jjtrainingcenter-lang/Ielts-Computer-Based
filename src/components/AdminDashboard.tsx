@@ -251,6 +251,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [newCandidateName, setNewCandidateName] = useState('');
   const [newCandidateDob, setNewCandidateDob] = useState('2000-01-01');
   const [newCandidateRegId, setNewCandidateRegId] = useState('');
+  const [autoGenerateRegId, setAutoGenerateRegId] = useState(true);
+  const [hasInitialGenerated, setHasInitialGenerated] = useState(false);
+
+  useEffect(() => {
+    if (autoGenerateRegId && !hasInitialGenerated && candidatesList.length > 0) {
+      setNewCandidateRegId(generateUniqueRegNumber(candidatesList));
+      setHasInitialGenerated(true);
+    }
+  }, [candidatesList, autoGenerateRegId, hasInitialGenerated]);
   const [selectedTestAssignments, setSelectedTestAssignments] = useState<string[]>([]);
   
   // Candidate Part Timer Options
@@ -548,7 +557,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
       await saveCandidate(newCand);
       setStatus(`Candidate ${newCand.name} (Reg #${newCand.id}) registered successfully with ${newCand.assignedTestIds.length} test(s) & ${TIMER_PRESETS[candidateTimerPreset]?.label || 'custom timer'}!`);
       setNewCandidateName('');
-      setNewCandidateRegId('');
+      if (autoGenerateRegId) {
+        setNewCandidateRegId(generateUniqueRegNumber([...candidatesList, newCand]));
+      } else {
+        setNewCandidateRegId('');
+      }
       refreshAllData();
       setTimeout(() => setStatus(null), 4000);
     } catch (err: any) {
@@ -1157,14 +1170,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
                           6-Digit Reg ID *
                         </label>
-                        <button
-                          type="button"
-                          onClick={handleGenerateRegNumber}
-                          className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
-                        >
-                          <Sparkles className="w-3 h-3 text-amber-500" />
-                          <span>Generate 6-Digit #</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-1.5 text-[10px] text-slate-600 cursor-pointer select-none">
+                            <input 
+                              type="checkbox" 
+                              checked={autoGenerateRegId}
+                              onChange={(e) => {
+                                setAutoGenerateRegId(e.target.checked);
+                                if (e.target.checked && !newCandidateRegId) {
+                                  handleGenerateRegNumber();
+                                }
+                              }}
+                              className="rounded border-slate-300 w-3 h-3 text-blue-600 focus:ring-blue-500"
+                            />
+                            Auto-generate
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleGenerateRegNumber}
+                            className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
+                          >
+                            <Sparkles className="w-3 h-3 text-amber-500" />
+                            <span>Generate</span>
+                          </button>
+                        </div>
                       </div>
                       <input
                         type="text"
