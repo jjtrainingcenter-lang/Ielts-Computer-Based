@@ -22,7 +22,6 @@ import { CandidateInstructions } from './components/CandidateInstructions';
 import { ExamDeviceCheck } from './components/ExamDeviceCheck';
 import { SectionIntro } from './components/SectionIntro';
 import { SectionTransition } from './components/SectionTransition';
-import { FinalReviewScreen } from './components/FinalReviewScreen';
 import {
   getAllTests,
   getAssignedTestsForCandidate,
@@ -663,31 +662,11 @@ export default function App() {
           nextSection={nextSection}
           onContinue={() => {
             if (nextSection === 'submit') {
-              setExamPhase('final_review');
+              handleSubmitTest();
             } else {
               handleSelectSection(nextSection);
               setExamPhase('section_intro');
             }
-          }}
-        />
-      );
-    }
-
-    if (examPhase === 'final_review') {
-      return (
-        <FinalReviewScreen
-          currentTest={currentTest}
-          userAnswers={userAnswers}
-          flaggedQuestions={flaggedQuestions}
-          writingTask1={writingTask1}
-          writingTask2={writingTask2}
-          onReviewSection={(section) => {
-            handleSelectSection(section, false);
-            setExamPhase('active_section');
-            setIsTimerRunning(true);
-          }}
-          onSubmit={() => {
-            handleSubmitTest();
           }}
         />
       );
@@ -737,14 +716,20 @@ export default function App() {
 
           <button
             onClick={() => {
-              if (window.confirm("Are you sure you want to finish this section early? You can still review your answers before final submission.")) {
+              if (window.confirm("Are you sure you want to finish this section early? You cannot return to it later.")) {
                 setIsTimerRunning(false);
-                setExamPhase('final_review');
+                const order: TestSection[] = ['listening', 'reading', 'writing'];
+                const currentIdx = order.indexOf(activeSection);
+                if (currentIdx < order.length - 1) {
+                  setExamPhase('section_transition');
+                } else {
+                  handleSubmitTest();
+                }
               }
             }}
             className="flex items-center space-x-1 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded shadow-sm transition-colors"
           >
-            <span>Finish Section / Review</span>
+            <span>Finish Section</span>
           </button>
         </div>
       </div>
@@ -827,8 +812,6 @@ export default function App() {
               settings={settings}
               onEvaluateAI={handleEvaluateWritingAI}
               isEvaluatingAI={isEvaluatingAI}
-              onPrevSection={() => handleSelectSection('reading', false)}
-              onNextSection={() => handleSelectSection('speaking', false)}
             />
           </div>
         )}
@@ -853,18 +836,6 @@ export default function App() {
           userAnswers={userAnswers}
           markedQuestions={flaggedQuestions}
           onToggleMark={handleToggleFlag}
-          onNextSection={() => {
-            if (activeSection === 'listening') {
-              handleSelectSection('reading', false);
-            } else if (activeSection === 'reading') {
-              handleSelectSection('writing', false);
-            }
-          }}
-          onPrevSection={() => {
-            if (activeSection === 'reading') {
-              handleSelectSection('listening', false);
-            }
-          }}
         />
       )}
 

@@ -28,7 +28,7 @@ export const SectionTransition: React.FC<SectionTransitionProps> = ({ completedS
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-center space-x-3">
           <span className="text-slate-500 text-sm font-semibold uppercase tracking-wider">Next:</span>
           <span className="text-slate-900 text-sm font-bold capitalize">
-            {nextSection === 'submit' ? 'Review & Submit' : nextSection}
+            {nextSection === 'submit' ? 'Submit Exam' : nextSection}
           </span>
         </div>
 
