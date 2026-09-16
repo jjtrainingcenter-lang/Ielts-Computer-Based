@@ -9,6 +9,8 @@ interface QuestionNavigatorProps {
   markedQuestions: Record<string, boolean>;
   onSelectQuestion: (index: number) => void;
   onToggleMark: (questionId: string) => void;
+  onNextSection?: () => void;
+  onPrevSection?: () => void;
 }
 
 export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
@@ -17,42 +19,28 @@ export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   userAnswers,
   markedQuestions,
   onSelectQuestion,
-  onToggleMark
+  onToggleMark,
+  onNextSection,
+  onPrevSection
 }) => {
   const currentQuestion = questions[currentQuestionIndex];
   if (!currentQuestion) return null;
   
   const isMarked = markedQuestions[currentQuestion.id];
 
-  // Determine part boundaries for the Next button
-  const activePart = currentQuestion.partNumber;
-  const activePassageId = currentQuestion.passageId;
-
-  let lastInPartIndex = currentQuestionIndex;
-  let nextPartIndex = -1;
-
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    const samePart = (activePart != null && q.partNumber != null)
-      ? q.partNumber === activePart
-      : (activePassageId ? q.passageId === activePassageId : true);
-    
-    if (samePart) {
-      if (i > lastInPartIndex) {
-        lastInPartIndex = i;
-      }
-    } else if (i > currentQuestionIndex && nextPartIndex === -1) {
-      nextPartIndex = i;
+  const handlePrev = () => {
+    if (currentQuestionIndex > 0) {
+      onSelectQuestion(currentQuestionIndex - 1);
+    } else if (onPrevSection) {
+      onPrevSection();
     }
-  }
-
-  const isAtLastQuestionOfPart = currentQuestionIndex === lastInPartIndex;
-  const isLastQuestionOfTest = currentQuestionIndex === questions.length - 1;
-  const isNextDisabled = !isAtLastQuestionOfPart || isLastQuestionOfTest;
+  };
 
   const handleNext = () => {
-    if (nextPartIndex !== -1) {
-      onSelectQuestion(nextPartIndex);
+    if (currentQuestionIndex < questions.length - 1) {
+      onSelectQuestion(currentQuestionIndex + 1);
+    } else if (onNextSection) {
+      onNextSection();
     }
   };
 
@@ -61,8 +49,8 @@ export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
       {/* Navigation Buttons */}
       <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
         <button
-          disabled={currentQuestionIndex === 0}
-          onClick={() => onSelectQuestion(currentQuestionIndex - 1)}
+          onClick={handlePrev}
+          disabled={currentQuestionIndex === 0 && !onPrevSection}
           className="flex items-center space-x-2 px-6 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -82,8 +70,8 @@ export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
         </button>
 
         <button
-          disabled={isNextDisabled}
           onClick={handleNext}
+          disabled={currentQuestionIndex === questions.length - 1 && !onNextSection}
           className="flex items-center space-x-2 px-6 py-2.5 bg-[#214162] hover:bg-[#1a334e] text-white font-bold text-sm rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <span>Next</span>

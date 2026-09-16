@@ -408,12 +408,14 @@ export default function App() {
     });
   };
 
-  const handleSelectSection = (sec: TestSection) => {
+  const handleSelectSection = (sec: TestSection, resetTimer = true) => {
     setActiveSection(sec);
     setCurrentQuestionIndex(0);
-    const duration = getSectionDurationSeconds(sec, currentTest, candidate);
-    setTimeRemainingSeconds(duration);
-    setSectionDeadline(Date.now() + duration * 1000);
+    if (resetTimer) {
+      const duration = getSectionDurationSeconds(sec, currentTest, candidate);
+      setTimeRemainingSeconds(duration);
+      setSectionDeadline(Date.now() + duration * 1000);
+    }
   };
 
   const handleAnswerChange = (qId: string, answer: string) => {
@@ -680,7 +682,7 @@ export default function App() {
           writingTask1={writingTask1}
           writingTask2={writingTask2}
           onReviewSection={(section) => {
-            handleSelectSection(section);
+            handleSelectSection(section, false);
             setExamPhase('active_section');
             setIsTimerRunning(true);
           }}
@@ -735,14 +737,14 @@ export default function App() {
 
           <button
             onClick={() => {
-              if (window.confirm("Are you sure you want to finish this section early? You cannot return to it later.")) {
+              if (window.confirm("Are you sure you want to finish this section early? You can still review your answers before final submission.")) {
                 setIsTimerRunning(false);
-                setExamPhase('section_transition');
+                setExamPhase('final_review');
               }
             }}
             className="flex items-center space-x-1 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded shadow-sm transition-colors"
           >
-            <span>Finish Section</span>
+            <span>Finish Section / Review</span>
           </button>
         </div>
       </div>
@@ -825,6 +827,8 @@ export default function App() {
               settings={settings}
               onEvaluateAI={handleEvaluateWritingAI}
               isEvaluatingAI={isEvaluatingAI}
+              onPrevSection={() => handleSelectSection('reading', false)}
+              onNextSection={() => handleSelectSection('speaking', false)}
             />
           </div>
         )}
@@ -849,6 +853,18 @@ export default function App() {
           userAnswers={userAnswers}
           markedQuestions={flaggedQuestions}
           onToggleMark={handleToggleFlag}
+          onNextSection={() => {
+            if (activeSection === 'listening') {
+              handleSelectSection('reading', false);
+            } else if (activeSection === 'reading') {
+              handleSelectSection('writing', false);
+            }
+          }}
+          onPrevSection={() => {
+            if (activeSection === 'reading') {
+              handleSelectSection('listening', false);
+            }
+          }}
         />
       )}
 

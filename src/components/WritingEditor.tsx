@@ -13,7 +13,9 @@ import {
   Clock,
   Layers,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 interface WritingEditorProps {
@@ -25,6 +27,8 @@ interface WritingEditorProps {
   settings: DisplaySettings;
   onEvaluateAI?: () => void;
   isEvaluatingAI?: boolean;
+  onPrevSection?: () => void;
+  onNextSection?: () => void;
 }
 
 export const WritingEditor: React.FC<WritingEditorProps> = ({
@@ -36,6 +40,8 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
   settings,
   onEvaluateAI,
   isEvaluatingAI,
+  onPrevSection,
+  onNextSection,
 }) => {
   const [activeTaskNum, setActiveTaskNum] = useState<1 | 2>(1);
   const [showTips, setShowTips] = useState(false);
@@ -60,7 +66,6 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
 
   const currentTaskList = tasks && tasks.length > 0 ? tasks : defaultTasks;
   const currentTask = currentTaskList.find((t) => t.taskNumber === activeTaskNum) || currentTaskList[0];
-
   const currentText = activeTaskNum === 1 ? task1Text : task2Text;
   const onChangeText = activeTaskNum === 1 ? onChangeTask1 : onChangeTask2;
 
@@ -70,7 +75,6 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
     if (!trimmed) return 0;
     return trimmed.split(/\s+/).length;
   };
-
   const countCharacters = (str: string) => str.length;
   const countParagraphs = (str: string) => {
     const trimmed = str.trim();
@@ -98,52 +102,75 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
       {/* Left Pane: Question Prompt, Instructions & Graphic Diagram */}
       <div className="lg:w-1/2 p-5 sm:p-6 overflow-y-auto border-r border-gray-300 space-y-5 bg-white">
         {/* Task Switcher Ribbon */}
-        <div className="flex items-center justify-between border-b border-gray-200 pb-3.5">
-          <div className="flex items-center space-x-2">
-            {[1, 2].map((num) => {
-              const t = currentTaskList.find((item) => item.taskNumber === num) || {
-                taskNumber: num as 1 | 2,
-                minWordCount: num === 1 ? 150 : 250,
-                timeLimitMinutes: num === 1 ? 20 : 40,
-              };
-              const taskWords = num === 1 ? wordCount1 : wordCount2;
-              const isDone = taskWords >= t.minWordCount;
+        <div className="flex flex-col space-y-3 border-b border-gray-200 pb-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              {[1, 2].map((num) => {
+                const t = currentTaskList.find((item) => item.taskNumber === num) || {
+                  taskNumber: num as 1 | 2,
+                  minWordCount: num === 1 ? 150 : 250,
+                  timeLimitMinutes: num === 1 ? 20 : 40,
+                };
+                const taskWords = num === 1 ? wordCount1 : wordCount2;
+                const isDone = taskWords >= t.minWordCount;
 
-              return (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => setActiveTaskNum(num as 1 | 2)}
-                  className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-all flex items-center space-x-2 ${
-                    num === activeTaskNum
-                      ? 'bg-[#214162] text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-                  }`}
-                >
-                  <span>Task {num}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
+                return (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setActiveTaskNum(num as 1 | 2)}
+                    className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-all flex items-center space-x-2 ${
                       num === activeTaskNum
-                        ? isDone
-                          ? 'bg-emerald-500 text-white'
-                          : 'bg-white/20 text-white'
-                        : isDone
-                        ? 'bg-emerald-100 text-emerald-800 font-bold'
-                        : 'bg-slate-200 text-slate-600'
+                        ? 'bg-[#214162] text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
                     }`}
                   >
-                    {taskWords}/{t.minWordCount}w
-                  </span>
-                </button>
-              );
-            })}
+                    <span>Task {num}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
+                        num === activeTaskNum
+                          ? isDone
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-white/20 text-white'
+                          : isDone
+                          ? 'bg-emerald-100 text-emerald-800 font-bold'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {taskWords}/{t.minWordCount}w
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-mono font-medium text-slate-500 flex items-center gap-1 bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Suggested: {currentTask.timeLimitMinutes || (activeTaskNum === 1 ? 20 : 40)} mins</span>
+              </span>
+            </div>
           </div>
-
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-mono font-medium text-slate-500 flex items-center gap-1 bg-slate-50 px-2 py-1 rounded border border-slate-200">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>Suggested: {currentTask.timeLimitMinutes || (activeTaskNum === 1 ? 20 : 40)} mins</span>
-            </span>
+            {onPrevSection && (
+              <button
+                type="button"
+                onClick={onPrevSection}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold rounded-md transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Previous Section</span>
+              </button>
+            )}
+            {onNextSection && (
+              <button
+                type="button"
+                onClick={onNextSection}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#214162] hover:bg-[#1a334e] text-white text-xs font-bold rounded-md transition-colors"
+              >
+                <span>Next Section</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
