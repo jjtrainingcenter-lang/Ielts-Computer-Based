@@ -181,6 +181,7 @@ export interface CandidateTestResult {
   speakingEvaluation?: SpeakingEvaluation;
   overallBand?: number;
   timestamp: string;
+  allowContinueSections?: TestSection[];
   examinerFeedback?: {
     task1Band?: number;
     task2Band?: number;

@@ -1,19 +1,23 @@
 import React from 'react';
-import { Candidate, IELTSTest } from '../types';
-import { BookOpen, Headphones, FileEdit, Mic, Play, Clock, CheckCircle, ShieldCheck, User, LogOut, ArrowRight, Sparkles } from 'lucide-react';
+import { Candidate, IELTSTest, CandidateTestResult, TestSection } from '../types';
+import { BookOpen, Headphones, FileEdit, Mic, Play, Clock, CheckCircle, ShieldCheck, User, LogOut, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
 
 interface CandidateTestSelectionProps {
   candidate: Candidate;
   availableTests: IELTSTest[];
+  candidateResults?: CandidateTestResult[];
   onSelectTest: (test: IELTSTest) => void;
   onLogout: () => void;
+  onResumeSection?: (test: IELTSTest, result: CandidateTestResult, section: TestSection) => void;
 }
 
 export const CandidateTestSelection: React.FC<CandidateTestSelectionProps> = ({
   candidate,
   availableTests,
+  candidateResults = [],
   onSelectTest,
-  onLogout
+  onLogout,
+  onResumeSection
 }) => {
   return (
     <div className="min-h-screen bg-[#f0f4f8] flex flex-col font-sans select-none">
@@ -192,19 +196,71 @@ export const CandidateTestSelection: React.FC<CandidateTestSelectionProps> = ({
                   </div>
 
                   {/* Card Action Footer */}
-                  <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                    <div className="text-[11px] font-mono text-slate-400">
-                      ID: {test.id}
-                    </div>
-
-                    <button
-                      onClick={() => onSelectTest(test)}
-                      className="inline-flex items-center space-x-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-sm group-hover:bg-blue-700 transition-colors"
-                    >
-                      <span>Take Test</span>
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                    </button>
-                  </div>
+                  {(() => {
+                    const result = candidateResults.find(r => r.testId === test.id);
+                    const isSubmitted = !!result;
+                    const allowedSections = result?.allowContinueSections || [];
+                    
+                    return (
+                      <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-[11px] font-mono text-slate-400">
+                            ID: {test.id}
+                          </div>
+                          {!isSubmitted && (
+                            <button
+                              onClick={() => onSelectTest(test)}
+                              className="inline-flex items-center space-x-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors"
+                            >
+                              <span>Take Test</span>
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          )}
+                          {isSubmitted && allowedSections.length === 0 && (
+                            <div className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-xs font-bold">
+                              <CheckCircle className="w-4 h-4" />
+                              <span>Submitted</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {isSubmitted && allowedSections.length > 0 && (
+                          <div className="pt-2 border-t border-slate-200">
+                            <div className="text-xs font-bold text-amber-700 mb-2 flex items-center space-x-1">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>Admin unlocked sections for continue:</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {allowedSections.includes('listening') && (
+                                <button
+                                  onClick={() => onResumeSection?.(test, result, 'listening')}
+                                  className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-xs font-bold rounded-md transition-colors"
+                                >
+                                  Resume Listening
+                                </button>
+                              )}
+                              {allowedSections.includes('reading') && (
+                                <button
+                                  onClick={() => onResumeSection?.(test, result, 'reading')}
+                                  className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold rounded-md transition-colors"
+                                >
+                                  Resume Reading
+                                </button>
+                              )}
+                              {allowedSections.includes('writing') && (
+                                <button
+                                  onClick={() => onResumeSection?.(test, result, 'writing')}
+                                  className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold rounded-md transition-colors"
+                                >
+                                  Resume Writing
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

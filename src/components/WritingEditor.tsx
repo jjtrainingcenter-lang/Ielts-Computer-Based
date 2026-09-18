@@ -350,6 +350,28 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
                 <span>Chars: <strong className="text-slate-800">{countCharacters(currentText)}</strong></span>
                 <span>Paragraphs: <strong className="text-slate-800">{countParagraphs(currentText)}</strong></span>
               </div>
+              <div className="flex items-center space-x-2">
+                {activeTaskNum === 1 && tasks.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTaskNum(2)}
+                    className="flex items-center space-x-1 px-3 py-1.5 bg-[#214162] text-white rounded font-sans text-xs font-bold hover:bg-[#1a334e] transition-colors"
+                  >
+                    <span>Go to Task 2</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {activeTaskNum === 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTaskNum(1)}
+                    className="flex items-center space-x-1 px-3 py-1.5 bg-slate-200 text-slate-700 rounded font-sans text-xs font-bold hover:bg-slate-300 transition-colors"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>Back to Task 1</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

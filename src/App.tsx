@@ -1,6 +1,6 @@
 import { ResizableSplitPane } from './components/ResizableSplitPane';
 import React, { useState, useEffect } from 'react';
-import { IELTSTest, TestSection, DisplaySettings, HighlightItem, WritingEvaluation, SpeakingEvaluation, Candidate } from './types';
+import { IELTSTest, TestSection, DisplaySettings, HighlightItem, WritingEvaluation, SpeakingEvaluation, Candidate, CandidateTestResult } from './types';
 import { ACADEMIC_TEST_1 } from './data/mockTests';
 import { ExamHeader } from './components/ExamHeader';
 import { LoginScreen } from './components/LoginScreen';
@@ -27,7 +27,8 @@ import {
   saveTestResult,
   getSectionDurationSeconds,
   resolveSectionTimers,
-  SESSION_STORAGE_KEY
+  SESSION_STORAGE_KEY,
+  getAllTestResults
 } from './lib/candidateStorage';
 import {
   signInWithGoogle,
@@ -83,6 +84,7 @@ export default function App() {
   const [candidateId, setCandidateId] = useState<string>(() => initialSession?.candidateId || '');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => !!initialSession?.isLoggedIn);
   const [assignedTests, setAssignedTests] = useState<IELTSTest[]>(() => initialSession?.assignedTests || []);
+  const [candidateResults, setCandidateResults] = useState<CandidateTestResult[]>([]);
   const [isSelectingTest, setIsSelectingTest] = useState<boolean>(() => !!initialSession?.isSelectingTest);
 
   // Test State
@@ -164,6 +166,8 @@ export default function App() {
         if (cTests.length > 0) {
           setAssignedTests(cTests);
         }
+        const allResults = await getAllTestResults();
+        setCandidateResults(allResults.filter(r => r.candidateId === candidateId));
       }
     };
     initTests();
@@ -574,8 +578,29 @@ export default function App() {
       <CandidateTestSelection
         candidate={candidate}
         availableTests={assignedTests.length > 0 ? assignedTests : allAvailableTests}
+        candidateResults={candidateResults}
         onSelectTest={handleSelectAssignedTest}
         onLogout={handleLogout}
+        onResumeSection={(test, result, section) => {
+          setCurrentTest(test);
+          setCandidateName(candidate.name);
+          setCandidateId(candidate.id);
+          setActiveSection(section);
+          setUserAnswers(result.userAnswers || {});
+          setFlaggedQuestions({});
+          setHighlights([]);
+          setWritingTask1(result.writingTask1 || '');
+          setWritingTask2(result.writingTask2 || '');
+          
+          const sectionDuration = getSectionDurationSeconds(section, test, candidate);
+          setTimeRemainingSeconds(sectionDuration);
+          setSectionDeadline(Date.now() + sectionDuration * 1000);
+          setExamPhase('device_check');
+          setIsTimerRunning(false);
+          setIsSelectorModalOpen(false);
+          setIsSelectingTest(false);
+          setHasConfirmedInstructions(true);
+        }}
       />
     );
   }

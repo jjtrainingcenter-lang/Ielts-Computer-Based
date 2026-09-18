@@ -12,7 +12,7 @@ import {
   deleteTestResult,
   generateUniqueRegNumber
 } from '../lib/candidateStorage';
-import { Candidate, IELTSTest, Question, ReadingPassage, CandidateTestResult, IELTSSectionTimers, WritingTaskData } from '../types';
+import { Candidate, IELTSTest, Question, ReadingPassage, CandidateTestResult, IELTSSectionTimers, WritingTaskData, TestSection } from '../types';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { ValidationReportModal } from './ValidationReportModal';
 import {
@@ -950,6 +950,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   };
 
   // Save Teacher / Examiner Evaluation
+  const handleToggleAllowContinue = async (section: TestSection) => {
+    if (!inspectingResult) return;
+    const currentAllowed = inspectingResult.allowContinueSections || [];
+    const isAllowed = currentAllowed.includes(section);
+    
+    const newAllowed = isAllowed 
+      ? currentAllowed.filter(s => s !== section)
+      : [...currentAllowed, section];
+      
+    const updated: CandidateTestResult = {
+      ...inspectingResult,
+      allowContinueSections: newAllowed
+    };
+    
+    await updateTestResult(updated);
+    setInspectingResult(updated);
+    refreshAllData();
+    setStatus(`Updated continue permissions for ${section}`);
+    setTimeout(() => setStatus(null), 3000);
+  };
+
   const handleSaveExaminerFeedback = async () => {
     if (!inspectingResult) return;
     const lBand = calculateBand(inspectingResult.listeningScore || 0);
@@ -2714,6 +2735,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
               {/* 1. WRITING TAB */}
               {inspectActiveTab === 'writing' && (
                 <div className="space-y-6">
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900">Writing Test Evaluation</h4>
+                      <p className="text-xs text-slate-500">Review and grade the candidate's essay submissions.</p>
+                    </div>
+                    <button
+                      onClick={() => handleToggleAllowContinue('writing')}
+                      className={`px-4 py-2 rounded font-bold text-xs flex items-center space-x-1.5 transition-colors border ${
+                        (inspectingResult.allowContinueSections || []).includes('writing')
+                          ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                          : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {(inspectingResult.allowContinueSections || []).includes('writing') ? (
+                        <CheckSquare className="w-4 h-4" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                      <span>Allow Candidate to Continue Writing Section</span>
+                    </button>
+                  </div>
                   {/* Task 1 Card */}
                   <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
                     <div className="p-4 bg-amber-50/70 border-b border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -2908,11 +2950,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
               {/* 2. LISTENING TAB */}
               {inspectActiveTab === 'listening' && (
                 <div className="space-y-4">
-                  <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h4 className="font-bold text-sm text-slate-900">Listening Test Performance Breakdown</h4>
                       <p className="text-xs text-slate-500">Total Raw Score: {inspectingResult.listeningScore} / 40 • Band {calculateBand(inspectingResult.listeningScore || 0).toFixed(1)}</p>
                     </div>
+                    <button
+                      onClick={() => handleToggleAllowContinue('listening')}
+                      className={`px-4 py-2 rounded font-bold text-xs flex items-center space-x-1.5 transition-colors border ${
+                        (inspectingResult.allowContinueSections || []).includes('listening')
+                          ? 'bg-indigo-100 text-indigo-800 border-indigo-300 hover:bg-indigo-200'
+                          : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {(inspectingResult.allowContinueSections || []).includes('listening') ? (
+                        <CheckSquare className="w-4 h-4" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                      <span>Allow Candidate to Continue Listening Section</span>
+                    </button>
                   </div>
 
                   <div className="space-y-2">
@@ -2968,11 +3025,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
               {/* 3. READING TAB */}
               {inspectActiveTab === 'reading' && (
                 <div className="space-y-4">
-                  <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h4 className="font-bold text-sm text-slate-900">Reading Test Performance Breakdown</h4>
                       <p className="text-xs text-slate-500">Total Raw Score: {inspectingResult.readingScore} / 40 • Band {calculateBand(inspectingResult.readingScore || 0).toFixed(1)}</p>
                     </div>
+                    <button
+                      onClick={() => handleToggleAllowContinue('reading')}
+                      className={`px-4 py-2 rounded font-bold text-xs flex items-center space-x-1.5 transition-colors border ${
+                        (inspectingResult.allowContinueSections || []).includes('reading')
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                          : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {(inspectingResult.allowContinueSections || []).includes('reading') ? (
+                        <CheckSquare className="w-4 h-4" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                      <span>Allow Candidate to Continue Reading Section</span>
+                    </button>
                   </div>
 
                   <div className="space-y-2">
