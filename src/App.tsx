@@ -9,7 +9,6 @@ import { PassageViewer } from './components/PassageViewer';
 import { ExamImageViewer } from './components/ExamImageViewer';
 import { ListeningPlayer } from './components/ListeningPlayer';
 import { WritingEditor } from './components/WritingEditor';
-import { SpeakingRecorder } from './components/SpeakingRecorder';
 import { QuestionPane } from './components/QuestionPane';
 import { QuestionNavigator } from './components/QuestionNavigator';
 import { ExamHelpModal } from './components/ExamHelpModal';
@@ -109,7 +108,6 @@ export default function App() {
   const [writingTask1, setWritingTask1] = useState<string>(() => initialSession?.writingTask1 || '');
   const [writingTask2, setWritingTask2] = useState<string>(() => initialSession?.writingTask2 || '');
   const [writingEval, setWritingEval] = useState<WritingEvaluation | null>(null);
-  const [speakingEval, setSpeakingEval] = useState<SpeakingEvaluation | null>(null);
   const [isEvaluatingAI, setIsEvaluatingAI] = useState<boolean>(false);
 
   // Display Settings
@@ -400,9 +398,7 @@ export default function App() {
       writingTask1: writingTask1,
       writingTask2: writingTask2,
       writingEvaluation: writingEval || undefined,
-      speakingEvaluation: speakingEval || undefined,
       writingBand: writingEval?.overallWritingBand,
-      speakingBand: speakingEval?.speakingBand,
       timestamp: new Date().toISOString()
     });
   };
@@ -476,37 +472,7 @@ export default function App() {
     }
   };
 
-  const handleEvaluateSpeakingAI = async (notes: string, transcript: string) => {
-    setIsEvaluatingAI(true);
-    try {
-      const res = await fetch('/api/evaluate-speaking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cueCardTopic: currentTest.speakingTasks[1]?.cueCard?.mainTopic,
-          userNotes: notes,
-          transcriptOrText: transcript,
-        }),
-      });
 
-      if (!res.ok) throw new Error('Speaking evaluation failed');
-      const data = await res.json();
-      setSpeakingEval(data);
-      alert('AI Speaking Band Score generated successfully!');
-    } catch (err) {
-      setSpeakingEval({
-        speakingBand: 7.0,
-        fluencyScore: 7.0,
-        lexicalScore: 7.5,
-        grammarScore: 7.0,
-        pronunciationScore: 7.0,
-        detailedFeedback: 'Fluid delivery with good structural coherence across Part 2 cue card points.',
-        keyTips: ['Maintain continuous speech without long hesitations in Part 3'],
-      });
-    } finally {
-      setIsEvaluatingAI(false);
-    }
-  };
 
   const handleCandidateLogin = (cand: Candidate, tests: IELTSTest[]) => {
     setCandidate(cand);
@@ -757,6 +723,9 @@ export default function App() {
                 flaggedQuestions={flaggedQuestions}
                 onToggleFlag={handleToggleFlag}
                 settings={settings}
+                highlights={highlights}
+                onAddHighlight={handleAddHighlight}
+                onRemoveHighlight={handleRemoveHighlight}
               />
             }
           />
@@ -795,6 +764,9 @@ export default function App() {
                   flaggedQuestions={flaggedQuestions}
                   onToggleFlag={handleToggleFlag}
                   settings={settings}
+                  highlights={highlights}
+                  onAddHighlight={handleAddHighlight}
+                  onRemoveHighlight={handleRemoveHighlight}
                 />
               </div>
             </div>
@@ -810,19 +782,9 @@ export default function App() {
               onChangeTask1={setWritingTask1}
               onChangeTask2={setWritingTask2}
               settings={settings}
-              onEvaluateAI={handleEvaluateWritingAI}
-              isEvaluatingAI={isEvaluatingAI}
-            />
-          </div>
-        )}
-
-        {activeSection === 'speaking' && (
-          <div className="flex-1 overflow-hidden">
-            <SpeakingRecorder
-              tasks={currentTest.speakingTasks}
-              settings={settings}
-              onEvaluateAI={handleEvaluateSpeakingAI}
-              isEvaluatingAI={isEvaluatingAI}
+              highlights={highlights}
+              onAddHighlight={handleAddHighlight}
+              onRemoveHighlight={handleRemoveHighlight}
             />
           </div>
         )}
@@ -872,7 +834,6 @@ export default function App() {
         writingTask1={writingTask1}
         writingTask2={writingTask2}
         writingEvaluation={writingEval}
-        speakingEvaluation={speakingEval}
         onClose={() => setIsResultsModalOpen(false)}
         onRestartTest={() => handleStartTest(currentTest, candidateName, candidateId, 'reading')}
       />

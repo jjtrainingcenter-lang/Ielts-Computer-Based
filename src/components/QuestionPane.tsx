@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Question, DisplaySettings } from '../types';
+import { Question, DisplaySettings, HighlightItem } from '../types';
 import { ExamImageViewer } from './ExamImageViewer';
+import { HighlightSelectionWrapper } from './HighlightSelectionWrapper';
+import { HighlightText } from './HighlightText';
 
 interface QuestionPaneProps {
   questions: Question[];
@@ -10,6 +12,9 @@ interface QuestionPaneProps {
   flaggedQuestions: Record<string, boolean>;
   onToggleFlag: (qId: string) => void;
   settings: DisplaySettings;
+  highlights?: HighlightItem[];
+  onAddHighlight?: (highlight: Omit<HighlightItem, 'id' | 'createdAt'>) => void;
+  onRemoveHighlight?: (id: string) => void;
 }
 
 const SINGLE_CHOICE_TYPES = new Set([
@@ -54,7 +59,12 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
   currentQuestionIndex,
   userAnswers,
   onAnswerChange,
+  flaggedQuestions,
+  onToggleFlag,
   settings,
+  highlights = [],
+  onAddHighlight,
+  onRemoveHighlight,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -155,10 +165,15 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
         </div>
       )}
 
-      <div ref={containerRef} className="p-8 flex flex-col gap-10 overflow-y-auto flex-1 ielts-scroll">
-        {displayedQuestions.map((q, index) => {
-          const currentAnswer = userAnswers[q.id] || '';
-          const prevQ = index > 0 ? displayedQuestions[index - 1] : null;
+      <HighlightSelectionWrapper
+        contextId={currentQuestion?.passageId || 'questions'}
+        onAddHighlight={(highlight) => onAddHighlight && onAddHighlight(highlight)}
+        className="p-8 flex flex-col gap-10 overflow-y-auto flex-1 ielts-scroll"
+      >
+        <div ref={containerRef} className="flex flex-col gap-10">
+          {displayedQuestions.map((q, index) => {
+            const currentAnswer = userAnswers[q.id] || '';
+            const prevQ = index > 0 ? displayedQuestions[index - 1] : null;
           const isNewGroup = !!q.groupId && q.groupId !== prevQ?.groupId;
           const isNewInstruction = !!q.instruction && q.instruction !== prevQ?.instruction && !q.groupInstruction;
           const isSingleChoice = SINGLE_CHOICE_TYPES.has(q.type);
@@ -174,14 +189,21 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
               {isNewGroup && (
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-4">
                   {q.groupInstruction && (
-                    <p className="font-bold text-slate-800 whitespace-pre-wrap">{q.groupInstruction}</p>
+                    <p className="font-bold text-slate-800 whitespace-pre-wrap">
+                      <HighlightText
+                        text={q.groupInstruction}
+                        contextId={currentQuestion?.passageId || 'questions'}
+                        highlights={highlights}
+                        onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                      />
+                    </p>
                   )}
                   {q.groupMedia?.type === 'image' && q.groupMedia.url && (
-                    <div className="flex justify-center">
+                    <div className="flex justify-start">
                       <ExamImageViewer
                         imageUrl={q.groupMedia.url}
                         imageAlt={q.groupMedia.alt}
-                        imageZoomable={q.groupMedia.zoomable}
+                        imageZoomable={q.groupMedia.zoomable !== false}
                       />
                     </div>
                   )}
@@ -190,7 +212,12 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
 
               {isNewInstruction && (
                 <div className="text-sm font-semibold text-slate-800 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 whitespace-pre-wrap">
-                  {q.instruction}
+                  <HighlightText
+                    text={q.instruction || ''}
+                    contextId={currentQuestion?.passageId || 'questions'}
+                    highlights={highlights}
+                    onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                  />
                 </div>
               )}
 
@@ -199,24 +226,24 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                 className="scroll-mt-32 flex flex-col"
               >
                 {q.media?.type === 'image' && q.media.url && (
-                  <div className={`mb-4 flex flex-col ${q.imagePosition === 'left' ? 'items-start' : q.imagePosition === 'right' ? 'items-end' : 'items-center'}`}>
+                  <div className={`mb-4 flex flex-col items-start`}>
                     <ExamImageViewer
                       imageUrl={q.media.url}
                       imageAlt={q.media.alt || q.imageAlt}
-                      imageZoomable={q.zoomable}
+                      imageZoomable={q.zoomable !== false}
                     />
-                    {q.media.caption && <p className="text-center text-xs text-slate-500 mt-2 italic">{q.media.caption}</p>}
+                    {q.media.caption && <p className="text-left text-xs text-slate-500 mt-2 italic">{q.media.caption}</p>}
                   </div>
                 )}
 
                 {!q.media && q.imageUrl && (
-                  <div className={`mb-4 flex flex-col ${q.imagePosition === 'left' ? 'items-start' : q.imagePosition === 'right' ? 'items-end' : 'items-center'}`}>
+                  <div className={`mb-4 flex flex-col items-start`}>
                     <ExamImageViewer
                       imageUrl={q.imageUrl}
                       imageAlt={q.imageAlt}
-                      imageZoomable={q.zoomable}
+                      imageZoomable={q.zoomable !== false}
                     />
-                    {q.imageCaption && <p className="text-center text-xs text-slate-500 mt-2 italic">{q.imageCaption}</p>}
+                    {q.imageCaption && <p className="text-left text-xs text-slate-500 mt-2 italic">{q.imageCaption}</p>}
                   </div>
                 )}
 
@@ -227,7 +254,14 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                   <div className={`text-black pt-1 flex-1 ${fontClass}`}>
                     {isCompletion && hasInlineBlank(q.questionText)
                       ? renderInlineCompletion(q)
-                      : <span className="whitespace-pre-wrap">{q.questionText}</span>}
+                      : <span className="whitespace-pre-wrap">
+                          <HighlightText
+                            text={q.questionText}
+                            contextId={currentQuestion?.passageId || 'questions'}
+                            highlights={highlights}
+                            onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                          />
+                        </span>}
                   </div>
                 </div>
 
@@ -260,7 +294,14 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                             onChange={() => {}}
                             className="w-[16px] h-[16px] border-gray-400 text-black focus:ring-0 cursor-pointer accent-black"
                           />
-                          <span className="ml-3 text-[15px] text-black tracking-wide">{opt.label}</span>
+                          <span className="ml-3 text-[15px] text-black tracking-wide">
+                            <HighlightText
+                              text={opt.label || ''}
+                              contextId={currentQuestion?.passageId || 'questions'}
+                              highlights={highlights}
+                              onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                            />
+                          </span>
                         </label>
                       );
                     }) : (
@@ -365,7 +406,8 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
             </React.Fragment>
           );
         })}
-      </div>
+        </div>
+      </HighlightSelectionWrapper>
     </div>
   );
 };

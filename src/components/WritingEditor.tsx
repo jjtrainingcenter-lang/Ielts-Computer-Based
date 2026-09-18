@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { WritingTaskData, DisplaySettings } from '../types';
+import { WritingTaskData, DisplaySettings, HighlightItem } from '../types';
 import { ExamImageViewer } from './ExamImageViewer';
+import { HighlightSelectionWrapper } from './HighlightSelectionWrapper';
+import { HighlightText } from './HighlightText';
+
 import {
   FileText,
   CheckCircle,
@@ -25,10 +28,9 @@ interface WritingEditorProps {
   onChangeTask1: (val: string) => void;
   onChangeTask2: (val: string) => void;
   settings: DisplaySettings;
-  onEvaluateAI?: () => void;
-  isEvaluatingAI?: boolean;
-  onPrevSection?: () => void;
-  onNextSection?: () => void;
+  highlights?: HighlightItem[];
+  onAddHighlight?: (highlight: Omit<HighlightItem, 'id' | 'createdAt'>) => void;
+  onRemoveHighlight?: (id: string) => void;
 }
 
 export const WritingEditor: React.FC<WritingEditorProps> = ({
@@ -38,10 +40,9 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
   onChangeTask1,
   onChangeTask2,
   settings,
-  onEvaluateAI,
-  isEvaluatingAI,
-  onPrevSection,
-  onNextSection,
+  highlights = [],
+  onAddHighlight,
+  onRemoveHighlight,
 }) => {
   const [activeTaskNum, setActiveTaskNum] = useState<1 | 2>(1);
   const [showTips, setShowTips] = useState(false);
@@ -151,26 +152,6 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            {onPrevSection && (
-              <button
-                type="button"
-                onClick={onPrevSection}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold rounded-md transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>Previous Section</span>
-              </button>
-            )}
-            {onNextSection && (
-              <button
-                type="button"
-                onClick={onNextSection}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#214162] hover:bg-[#1a334e] text-white text-xs font-bold rounded-md transition-colors"
-              >
-                <span>Next Section</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
 
@@ -223,22 +204,37 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
 
           {/* Prompt Box */}
           <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm leading-relaxed text-slate-800 whitespace-pre-line shadow-2xs font-sans">
-            {currentTask.prompt}
+            {onAddHighlight ? (
+              <HighlightSelectionWrapper
+                contextId={`writing_${activeTaskNum}`}
+                onAddHighlight={onAddHighlight}
+              >
+                <HighlightText
+                  text={currentTask.prompt}
+                  contextId={`writing_${activeTaskNum}`}
+                  highlights={highlights}
+                  onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                />
+              </HighlightSelectionWrapper>
+            ) : (
+              currentTask.prompt
+            )}
           </div>
 
           {/* Optional Task Image (Map, Graph, Diagram) */}
           {currentTask.media && currentTask.media.type === 'image' && currentTask.media.url && (
-            <div className="mb-4 flex flex-col items-center">
+            <div className="mb-4 flex flex-col items-start mt-4">
               <ExamImageViewer 
                 imageUrl={currentTask.media.url} 
                 imageAlt={currentTask.media.alt || `Visual Reference for Task ${activeTaskNum}`} 
                 imageZoomable={currentTask.imageZoomable !== false} 
               />
-              {currentTask.media.caption && <p className="text-center text-xs text-slate-500 mt-2 italic">{currentTask.media.caption}</p>}
+              {currentTask.media.caption && <p className="text-left text-xs text-slate-500 mt-2 italic">{currentTask.media.caption}</p>}
             </div>
           )}
+
           {!currentTask.media && currentTask.imageUrl && (
-            <div className="mb-4">
+            <div className="mb-4 flex flex-col items-start mt-4">
               <ExamImageViewer 
                 imageUrl={currentTask.imageUrl} 
                 imageAlt={currentTask.imageAlt || `Visual Reference for Task ${activeTaskNum}`} 
@@ -321,34 +317,12 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
           <div className="flex items-center space-x-2.5">
             {/* Live Word Count Badge */}
             <div
-              className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-bold border transition-colors ${
-                isTargetReached
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs'
-                  : 'bg-amber-50 text-amber-800 border-amber-300'
-              }`}
+              className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-bold border transition-colors bg-white border-slate-300 text-slate-700`}
             >
-              {isTargetReached ? (
-                <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-              ) : (
-                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-              )}
               <span>
-                {wordCount} / {minWords} words
+                {wordCount} words
               </span>
             </div>
-
-            {/* AI Grading Trigger button */}
-            {onEvaluateAI && (
-              <button
-                type="button"
-                onClick={onEvaluateAI}
-                disabled={isEvaluatingAI}
-                className="flex items-center space-x-1.5 px-3 py-1 bg-[#214162] hover:bg-[#1a334e] text-white font-bold text-xs rounded-md transition-all disabled:opacity-50 shadow-2xs"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>{isEvaluatingAI ? 'Grading...' : 'AI Band Score'}</span>
-              </button>
-            )}
           </div>
         </div>
 
@@ -357,36 +331,25 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
           <textarea
             value={currentText}
             onChange={(e) => onChangeText(e.target.value)}
-            placeholder={`Type your Task ${activeTaskNum} answer here...\n\nInstructions:\n• Write your response directly in this text box.\n• Minimum requirement: ${minWords} words.\n• Your response is recorded live and will be submitted for examiner assessment.`}
+            placeholder={`Type your Task ${activeTaskNum} answer here...\n\nInstructions:\n• Write your response directly in this text box.\n• Your response is recorded live and will be submitted for examiner assessment.`}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
+            data-gramm="false"
+            data-gramm_editor="false"
+            data-enable-grammarly="false"
             className={`w-full flex-1 p-4 bg-slate-50/60 hover:bg-slate-50 focus:bg-white rounded-lg border border-slate-300 focus:border-[#214162] focus:ring-1 focus:ring-[#214162] focus:outline-none font-sans ${fontSizeClass} text-slate-900 resize-none transition-colors`}
           />
 
-          {/* Bottom Word Progress & Text Statistics Bar */}
-          <div className="mt-3 pt-2 border-t border-slate-100 space-y-1.5 shrink-0">
+          {/* Bottom Text Statistics Bar */}
+          <div className="mt-3 pt-2 border-t border-slate-100 shrink-0">
             <div className="flex justify-between items-center text-[11px] text-slate-500 font-mono">
               <div className="flex items-center space-x-3">
                 <span>Words: <strong className="text-slate-800">{wordCount}</strong></span>
                 <span>Chars: <strong className="text-slate-800">{countCharacters(currentText)}</strong></span>
                 <span>Paragraphs: <strong className="text-slate-800">{countParagraphs(currentText)}</strong></span>
               </div>
-              <div>
-                <span className={isTargetReached ? 'text-emerald-700 font-bold' : 'text-slate-600'}>
-                  {progressPercent}% of minimum target
-                </span>
-              </div>
-            </div>
-
-            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all duration-300 ${
-                  isTargetReached ? 'bg-emerald-500' : 'bg-[#214162]'
-                }`}
-                style={{ width: `${progressPercent}%` }}
-              />
             </div>
           </div>
         </div>
