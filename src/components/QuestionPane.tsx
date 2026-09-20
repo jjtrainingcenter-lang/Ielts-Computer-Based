@@ -3,6 +3,7 @@ import { Question, DisplaySettings, HighlightItem } from '../types';
 import { ExamImageViewer } from './ExamImageViewer';
 import { HighlightSelectionWrapper } from './HighlightSelectionWrapper';
 import { HighlightText } from './HighlightText';
+import { HighlightPaletteBar } from './HighlightPaletteBar';
 
 interface QuestionPaneProps {
   questions: Question[];
@@ -15,6 +16,7 @@ interface QuestionPaneProps {
   highlights?: HighlightItem[];
   onAddHighlight?: (highlight: Omit<HighlightItem, 'id' | 'createdAt'>) => void;
   onRemoveHighlight?: (id: string) => void;
+  onUpdateHighlight?: (id: string, updates: Partial<HighlightItem>) => void;
 }
 
 const SINGLE_CHOICE_TYPES = new Set([
@@ -65,6 +67,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
   highlights = [],
   onAddHighlight,
   onRemoveHighlight,
+  onUpdateHighlight,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -158,10 +161,27 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                 Answer Questions {firstVisibleQuestion}–{lastVisibleQuestion} for this passage.
               </p>
             </div>
-            <span className="text-[11px] font-semibold text-slate-500 bg-white border border-slate-200 rounded px-2.5 py-1">
-              Questions {firstVisibleQuestion}–{lastVisibleQuestion}
+            <div className="flex items-center space-x-3">
+              <HighlightPaletteBar compact />
+              <span className="text-[11px] font-semibold text-slate-500 bg-white border border-slate-200 rounded px-2.5 py-1">
+                Questions {firstVisibleQuestion}–{lastVisibleQuestion}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isReadingSet && currentQuestion && (
+        <div className="shrink-0 px-8 py-2.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
+          <div className="flex items-center space-x-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#214162]">
+              Part {currentQuestion.partNumber || 1}
+            </span>
+            <span className="text-xs text-slate-500">
+              · Question {currentQuestion.questionNumber} of {questions.length}
             </span>
           </div>
+          <HighlightPaletteBar compact />
         </div>
       )}
 
@@ -195,6 +215,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                         contextId={currentQuestion?.passageId || 'questions'}
                         highlights={highlights}
                         onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                        onUpdateHighlight={onUpdateHighlight}
                       />
                     </p>
                   )}
@@ -217,6 +238,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                     contextId={currentQuestion?.passageId || 'questions'}
                     highlights={highlights}
                     onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                    onUpdateHighlight={onUpdateHighlight}
                   />
                 </div>
               )}
@@ -262,6 +284,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                             contextId={currentQuestion?.passageId || 'questions'}
                             highlights={highlights}
                             onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                            onUpdateHighlight={onUpdateHighlight}
                           />
                         </span>}
                   </div>
@@ -302,6 +325,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                               contextId={currentQuestion?.passageId || 'questions'}
                               highlights={highlights}
                               onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                              onUpdateHighlight={onUpdateHighlight}
                             />
                           </span>
                         </label>
@@ -339,7 +363,15 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                       <thead>
                         <tr>
                           {q.tableData.headers.map((h, i) => (
-                            <th key={i} className="border border-[#444] p-2 bg-slate-100 font-bold text-left text-slate-800">{h}</th>
+                            <th key={i} className="border border-[#444] p-2 bg-slate-100 font-bold text-left text-slate-800">
+                              <HighlightText
+                                text={h}
+                                contextId={currentQuestion?.passageId || 'questions'}
+                                highlights={highlights}
+                                onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                                onUpdateHighlight={onUpdateHighlight}
+                              />
+                            </th>
                           ))}
                         </tr>
                       </thead>
@@ -349,7 +381,13 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                             {row.map((cell, cIdx) => (
                               <td key={cIdx} className="border border-[#444] p-2 align-top text-slate-800">
                                 {typeof cell === 'string' ? (
-                                  <span>{cell}</span>
+                                  <HighlightText
+                                    text={cell}
+                                    contextId={currentQuestion?.passageId || 'questions'}
+                                    highlights={highlights}
+                                    onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                                    onUpdateHighlight={onUpdateHighlight}
+                                  />
                                 ) : (
                                   <div className="flex items-center space-x-2">
                                     <span className="font-bold text-slate-500 text-sm">{cell.placeholder}</span>

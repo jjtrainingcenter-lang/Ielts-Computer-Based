@@ -438,6 +438,12 @@ export default function App() {
     setHighlights((prev) => [...prev, newItem]);
   };
 
+  const handleUpdateHighlight = (id: string, updates: Partial<HighlightItem>) => {
+    setHighlights((prev) =>
+      prev.map((h) => (h.id === id ? { ...h, ...updates } : h))
+    );
+  };
+
   const handleRemoveHighlight = (id: string) => {
     setHighlights((prev) => prev.filter((h) => h.id !== id));
   };
@@ -791,6 +797,7 @@ export default function App() {
                 highlights={highlights}
                 onAddHighlight={handleAddHighlight}
                 onRemoveHighlight={handleRemoveHighlight}
+                onUpdateHighlight={handleUpdateHighlight}
                 settings={settings}
               />
             }
@@ -806,6 +813,7 @@ export default function App() {
                 highlights={highlights}
                 onAddHighlight={handleAddHighlight}
                 onRemoveHighlight={handleRemoveHighlight}
+                onUpdateHighlight={handleUpdateHighlight}
               />
             }
           />
@@ -847,6 +855,7 @@ export default function App() {
                   highlights={highlights}
                   onAddHighlight={handleAddHighlight}
                   onRemoveHighlight={handleRemoveHighlight}
+                  onUpdateHighlight={handleUpdateHighlight}
                 />
               </div>
             </div>
@@ -865,6 +874,7 @@ export default function App() {
               highlights={highlights}
               onAddHighlight={handleAddHighlight}
               onRemoveHighlight={handleRemoveHighlight}
+              onUpdateHighlight={handleUpdateHighlight}
               activeTask={activeWritingTask}
               onSelectTask={setActiveWritingTask}
             />

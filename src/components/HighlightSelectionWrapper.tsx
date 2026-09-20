@@ -1,12 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { HighlightItem } from '../types';
 import { TextHighlighterPopover } from './TextHighlighterPopover';
+import { HighlightColor, getStoredHighlightColor } from '../lib/highlightColors';
 
 interface HighlightSelectionWrapperProps {
   children: React.ReactNode;
   contextId: string;
   onAddHighlight: (highlight: Omit<HighlightItem, 'id' | 'createdAt'>) => void;
   className?: string;
+  defaultColor?: HighlightColor;
 }
 
 export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps> = ({
@@ -14,6 +16,7 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
   contextId,
   onAddHighlight,
   className = '',
+  defaultColor,
 }) => {
   const [selectedText, setSelectedText] = useState('');
   const [popoverPos, setPopoverPos] = useState<{ x: number; y: number } | null>(null);
@@ -36,25 +39,27 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
     }
   };
 
-  const handleApplyHighlight = () => {
+  const handleApplyHighlight = (color?: HighlightColor) => {
     if (!selectedText) return;
+    const resolvedColor = color || defaultColor || getStoredHighlightColor();
     onAddHighlight({
       passageId: contextId,
       text: selectedText,
-      color: 'yellow',
+      color: resolvedColor,
     });
     setSelectedText('');
     setPopoverPos(null);
     window.getSelection()?.removeAllRanges();
   };
 
-  const handleAddNote = (noteContent: string) => {
+  const handleAddNote = (noteContent: string, color?: HighlightColor) => {
     if (!selectedText) return;
+    const resolvedColor = color || defaultColor || getStoredHighlightColor();
     if (noteContent !== null) {
       onAddHighlight({
         passageId: contextId,
         text: selectedText,
-        color: 'yellow',
+        color: resolvedColor,
         note: noteContent || 'Passage note',
       });
     }
@@ -70,10 +75,11 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
         <TextHighlighterPopover
           x={popoverPos.x}
           y={popoverPos.y}
-          onHighlight={handleApplyHighlight}
-          onAddNote={() => {
+          defaultColor={defaultColor}
+          onHighlight={(chosenColor) => handleApplyHighlight(chosenColor)}
+          onAddNote={(chosenColor) => {
             const note = window.prompt('Enter your note for this text:');
-            if (note !== null) handleAddNote(note);
+            if (note !== null) handleAddNote(note, chosenColor);
           }}
           onClose={() => {
             setSelectedText('');

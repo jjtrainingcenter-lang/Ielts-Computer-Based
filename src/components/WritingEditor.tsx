@@ -3,6 +3,7 @@ import { WritingTaskData, DisplaySettings, HighlightItem } from '../types';
 import { ExamImageViewer } from './ExamImageViewer';
 import { HighlightSelectionWrapper } from './HighlightSelectionWrapper';
 import { HighlightText } from './HighlightText';
+import { HighlightPaletteBar } from './HighlightPaletteBar';
 
 import {
   FileText,
@@ -31,6 +32,7 @@ interface WritingEditorProps {
   highlights?: HighlightItem[];
   onAddHighlight?: (highlight: Omit<HighlightItem, 'id' | 'createdAt'>) => void;
   onRemoveHighlight?: (id: string) => void;
+  onUpdateHighlight?: (id: string, updates: Partial<HighlightItem>) => void;
   activeTask?: 1 | 2;
   onSelectTask?: (taskNum: 1 | 2) => void;
 }
@@ -45,6 +47,7 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
   highlights = [],
   onAddHighlight,
   onRemoveHighlight,
+  onUpdateHighlight,
   activeTask,
   onSelectTask,
 }) => {
@@ -231,6 +234,14 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
             </div>
           )}
 
+          {/* Prompt Header & Palette */}
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Task Prompt
+            </span>
+            <HighlightPaletteBar compact />
+          </div>
+
           {/* Prompt Box */}
           <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm leading-relaxed text-slate-800 whitespace-pre-line shadow-2xs font-sans">
             {onAddHighlight ? (
@@ -243,6 +254,7 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
                   contextId={`writing_${activeTaskNum}`}
                   highlights={highlights}
                   onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                  onUpdateHighlight={onUpdateHighlight}
                 />
               </HighlightSelectionWrapper>
             ) : (

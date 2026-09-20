@@ -212,12 +212,14 @@ export interface IELTSTest {
   updatedAt?: string;
 }
 
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink' | 'orange' | 'purple' | 'cyan';
+
 export interface HighlightItem {
   id: string;
   passageId: string;
   text: string;
   paragraphId?: string;
-  color: 'yellow' | 'cyan' | 'pink';
+  color: HighlightColor | string;
   note?: string;
   createdAt: string;
 }
