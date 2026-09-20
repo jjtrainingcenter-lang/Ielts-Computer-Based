@@ -28,7 +28,10 @@ import {
   getSectionDurationSeconds,
   resolveSectionTimers,
   SESSION_STORAGE_KEY,
-  getAllTestResults
+  getAllTestResults,
+  subscribeToCandidate,
+  subscribeToTests,
+  isTestAssignedToCandidate
 } from './lib/candidateStorage';
 import {
   signInWithGoogle,

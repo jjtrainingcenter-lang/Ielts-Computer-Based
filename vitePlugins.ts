@@ -101,10 +101,12 @@ export const candidateOperationsPlugin = (): Plugin => ({
 
     if (cleanId.endsWith('/src/App.tsx')) {
       let next = code;
-      next = next.replace(
-        "  resolveSectionTimers,\n  SESSION_STORAGE_KEY\n} from './lib/candidateStorage';",
-        "  resolveSectionTimers,\n  SESSION_STORAGE_KEY,\n  subscribeToCandidate,\n  subscribeToTests,\n  isTestAssignedToCandidate\n} from './lib/candidateStorage';",
-      );
+      if (!next.includes('subscribeToCandidate')) {
+        next = next.replace(
+          "} from './lib/candidateStorage';",
+          "  subscribeToCandidate,\n  subscribeToTests,\n  isTestAssignedToCandidate\n} from './lib/candidateStorage';",
+        );
+      }
 
       const liveSyncMarker = '  // Auto-persist active exam state to localStorage so candidate won\'t lose work on page reload';
       if (!next.includes('Candidate/test live synchronization') && next.includes(liveSyncMarker)) {
