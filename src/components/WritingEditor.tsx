@@ -31,6 +31,8 @@ interface WritingEditorProps {
   highlights?: HighlightItem[];
   onAddHighlight?: (highlight: Omit<HighlightItem, 'id' | 'createdAt'>) => void;
   onRemoveHighlight?: (id: string) => void;
+  activeTask?: 1 | 2;
+  onSelectTask?: (taskNum: 1 | 2) => void;
 }
 
 export const WritingEditor: React.FC<WritingEditorProps> = ({
@@ -43,8 +45,15 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
   highlights = [],
   onAddHighlight,
   onRemoveHighlight,
+  activeTask,
+  onSelectTask,
 }) => {
-  const [activeTaskNum, setActiveTaskNum] = useState<1 | 2>(1);
+  const [internalTaskNum, setInternalTaskNum] = useState<1 | 2>(1);
+  const activeTaskNum = activeTask !== undefined ? activeTask : internalTaskNum;
+  const setActiveTaskNum = (num: 1 | 2) => {
+    setInternalTaskNum(num);
+    onSelectTask?.(num);
+  };
   const [showTips, setShowTips] = useState(false);
 
   // Fallback if tasks are empty or undefined
@@ -149,6 +158,26 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
                 <span>Suggested: {currentTask.timeLimitMinutes || (activeTaskNum === 1 ? 20 : 40)} mins</span>
               </span>
+
+              {activeTaskNum === 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveTaskNum(2)}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1 bg-[#214162] hover:bg-[#1a334e] text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
+                >
+                  <span>Next Task 2</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setActiveTaskNum(1)}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition-colors"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Task 1</span>
+                </button>
+              )}
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -298,6 +327,32 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
             </div>
           </div>
         )}
+
+        {/* Left Pane Bottom Action Navigation */}
+        <div className="pt-4 border-t border-slate-200 flex items-center justify-between mt-auto">
+          <span className="text-xs text-slate-500 font-medium">
+            Task {activeTaskNum} of {currentTaskList.length}
+          </span>
+          {activeTaskNum === 1 ? (
+            <button
+              type="button"
+              onClick={() => setActiveTaskNum(2)}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-[#214162] hover:bg-[#1a334e] text-white text-xs font-bold rounded-lg shadow-sm transition-colors"
+            >
+              <span>Next: Move to Task 2</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setActiveTaskNum(1)}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-300 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Previous: Back to Task 1</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Right Pane: Student Writing Text Editor & Live Word Counter */}
@@ -323,6 +378,26 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
                 {wordCount} words
               </span>
             </div>
+
+            {activeTaskNum === 1 ? (
+              <button
+                type="button"
+                onClick={() => setActiveTaskNum(2)}
+                className="inline-flex items-center space-x-1 px-3 py-1 bg-[#214162] hover:bg-[#1a334e] text-white text-xs font-bold rounded shadow-xs transition-colors"
+              >
+                <span>Next Task</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setActiveTaskNum(1)}
+                className="inline-flex items-center space-x-1 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded border border-slate-300 transition-colors"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Task 1</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -351,13 +426,13 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
                 <span>Paragraphs: <strong className="text-slate-800">{countParagraphs(currentText)}</strong></span>
               </div>
               <div className="flex items-center space-x-2">
-                {activeTaskNum === 1 && tasks.length > 1 && (
+                {activeTaskNum === 1 && currentTaskList.length > 1 && (
                   <button
                     type="button"
                     onClick={() => setActiveTaskNum(2)}
-                    className="flex items-center space-x-1 px-3 py-1.5 bg-[#214162] text-white rounded font-sans text-xs font-bold hover:bg-[#1a334e] transition-colors"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#214162] text-white rounded font-sans text-xs font-bold hover:bg-[#1a334e] transition-colors shadow-xs"
                   >
-                    <span>Go to Task 2</span>
+                    <span>Next: Go to Task 2</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -365,10 +440,10 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveTaskNum(1)}
-                    className="flex items-center space-x-1 px-3 py-1.5 bg-slate-200 text-slate-700 rounded font-sans text-xs font-bold hover:bg-slate-300 transition-colors"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-200 text-slate-700 rounded font-sans text-xs font-bold hover:bg-slate-300 transition-colors"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
-                    <span>Back to Task 1</span>
+                    <span>Previous: Back to Task 1</span>
                   </button>
                 )}
               </div>

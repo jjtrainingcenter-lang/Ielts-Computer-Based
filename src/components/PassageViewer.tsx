@@ -207,7 +207,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
           x={popoverPos.x}
           y={popoverPos.y}
           onHighlight={handleApplyHighlight}
-          onAddNote={handleAddNote}
+          onAddNote={() => handleAddNote('Passage note')}
           onClose={() => {
             setSelectedText('');
             setPopoverPos(null);

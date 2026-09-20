@@ -1,4 +1,4 @@
-export type TestSection = 'listening' | 'reading' | 'writing';
+export type TestSection = 'listening' | 'reading' | 'writing' | 'speaking';
 
 export type QuestionType =
   | 'multiple-choice'

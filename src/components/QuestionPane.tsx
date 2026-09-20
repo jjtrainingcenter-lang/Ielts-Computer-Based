@@ -222,7 +222,9 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
               )}
 
               <div
-                ref={(el) => (questionRefs.current[index] = el)}
+                ref={(el) => {
+                  questionRefs.current[index] = el;
+                }}
                 className="scroll-mt-32 flex flex-col"
               >
                 {q.media?.type === 'image' && q.media.url && (

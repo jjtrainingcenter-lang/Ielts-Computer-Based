@@ -35,7 +35,7 @@ import {
   rememberAdminSession,
   hasRememberedAdminSession,
 } from './lib/firebase';
-import { HelpCircle, X } from 'lucide-react';
+import { HelpCircle, X, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react';
 
 interface StoredSession {
   candidate: Candidate | null;
@@ -109,6 +109,7 @@ export default function App() {
   // Writing & Speaking Responses
   const [writingTask1, setWritingTask1] = useState<string>(() => initialSession?.writingTask1 || '');
   const [writingTask2, setWritingTask2] = useState<string>(() => initialSession?.writingTask2 || '');
+  const [activeWritingTask, setActiveWritingTask] = useState<1 | 2>(1);
   const [writingEval, setWritingEval] = useState<WritingEvaluation | null>(null);
   const [isEvaluatingAI, setIsEvaluatingAI] = useState<boolean>(false);
 
@@ -484,18 +485,19 @@ export default function App() {
     setCandidateId(cand.id);
     setAssignedTests(tests);
     setIsLoggedIn(true);
+    setIsSelectingTest(true);
+    setHasConfirmedInstructions(false);
 
-    if (tests.length > 1) {
-      setIsSelectingTest(true);
-      setHasConfirmedInstructions(false);
-    } else if (tests.length === 1) {
+    if (tests && tests.length > 0) {
       setCurrentTest(tests[0]);
-      setIsSelectingTest(false);
-      setHasConfirmedInstructions(false);
-    } else {
-      setIsSelectingTest(true);
-      setHasConfirmedInstructions(false);
     }
+
+    // Refresh candidate test results immediately
+    getAllTestResults()
+      .then((allResults) => {
+        setCandidateResults((allResults || []).filter((r) => r && r.candidateId === cand.id));
+      })
+      .catch((e) => console.error('Failed to load candidate results:', e));
   };
 
   const handleSelectAssignedTest = (test: IELTSTest) => {
@@ -573,7 +575,23 @@ export default function App() {
     );
   }
 
-  if (isLoggedIn && !isAdminLoggedIn && isSelectingTest && candidate) {
+  if (isLoggedIn && !isAdminLoggedIn && isSelectingTest) {
+    if (!candidate) {
+      return (
+        <div className="min-h-screen bg-[#f0f4f8] flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-xl shadow-md text-center space-y-3 max-w-sm">
+            <p className="text-sm font-semibold text-slate-700">Loading candidate profile...</p>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-[#214162] text-white rounded text-xs font-bold hover:bg-[#1a334e]"
+            >
+              Back to Login
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <CandidateTestSelection
         candidate={candidate}
@@ -591,6 +609,9 @@ export default function App() {
           setHighlights([]);
           setWritingTask1(result.writingTask1 || '');
           setWritingTask2(result.writingTask2 || '');
+          if (section === 'writing') {
+            setActiveWritingTask(1);
+          }
           
           const sectionDuration = getSectionDurationSeconds(section, test, candidate);
           setTimeRemainingSeconds(sectionDuration);
@@ -608,10 +629,10 @@ export default function App() {
   if (isLoggedIn && !isAdminLoggedIn && !hasConfirmedInstructions) {
     return (
       <CandidateInstructions
-        candidateName={candidateName}
-        candidateId={candidateId}
-        testTitle={currentTest.title}
-        testModule={currentTest.module}
+        candidateName={candidateName || candidate?.name || 'Candidate'}
+        candidateId={candidateId || candidate?.id || ''}
+        testTitle={currentTest?.title || 'IELTS Practice Test'}
+        testModule={currentTest?.module || 'academic'}
         hasMultipleTests={assignedTests.length > 1}
         onBackToSelection={() => {
           setIsSelectingTest(true);
@@ -660,6 +681,37 @@ export default function App() {
             }
           }}
         />
+      );
+    }
+
+    if (examPhase === 'submitted') {
+      return (
+        <div className="min-h-screen bg-[#f0f4f8] flex flex-col items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center space-y-4 border-t-8 border-emerald-600">
+            <CheckCircle className="w-12 h-12 text-emerald-600 mx-auto" />
+            <h2 className="text-xl font-bold text-slate-900">Exam Submitted Successfully</h2>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Your practice test answers have been saved and recorded. You can view your assigned tests or return to the login screen.
+            </p>
+            <div className="flex gap-2 justify-center pt-2">
+              <button
+                onClick={() => {
+                  setIsSelectingTest(true);
+                  setHasConfirmedInstructions(false);
+                }}
+                className="px-4 py-2 bg-[#214162] text-white rounded-lg text-xs font-bold hover:bg-[#1a334e]"
+              >
+                View Assigned Tests
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold"
+              >
+                Log Out
+              </button>
+            </div>
+          </div>
+        </div>
       );
     }
   }
@@ -810,10 +862,70 @@ export default function App() {
               highlights={highlights}
               onAddHighlight={handleAddHighlight}
               onRemoveHighlight={handleRemoveHighlight}
+              activeTask={activeWritingTask}
+              onSelectTask={setActiveWritingTask}
             />
           </div>
         )}
       </main>
+
+      {activeSection === 'writing' && (
+        <div className="bg-[#E9EEF4] border-t border-slate-300 px-4 py-2.5 flex items-center justify-between text-xs select-none shadow-inner shrink-0">
+          <div className="flex items-center space-x-2">
+            <span className="font-bold text-slate-700">Writing Section:</span>
+            <button
+              type="button"
+              onClick={() => setActiveWritingTask(1)}
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center space-x-1.5 transition-all ${
+                activeWritingTask === 1
+                  ? 'bg-[#214162] text-white shadow-xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
+              }`}
+            >
+              <span>Task 1</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/10">
+                {writingTask1.trim() ? writingTask1.trim().split(/\s+/).length : 0}w
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveWritingTask(2)}
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center space-x-1.5 transition-all ${
+                activeWritingTask === 2
+                  ? 'bg-[#214162] text-white shadow-xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
+              }`}
+            >
+              <span>Task 2</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/10">
+                {writingTask2.trim() ? writingTask2.trim().split(/\s+/).length : 0}w
+              </span>
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            {activeWritingTask === 1 ? (
+              <button
+                type="button"
+                onClick={() => setActiveWritingTask(2)}
+                className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-[#214162] hover:bg-[#1a334e] text-white font-bold rounded-lg shadow-xs transition-colors"
+              >
+                <span>Move to Next Task (Task 2)</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setActiveWritingTask(1)}
+                className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold rounded-lg shadow-xs transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Previous Task (Task 1)</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {(activeSection === 'reading' || activeSection === 'listening') && (
         <QuestionNavigator

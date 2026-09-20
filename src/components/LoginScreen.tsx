@@ -28,22 +28,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
       setError('Registration ID must be exactly 6 digits (e.g., 123456)');
       return;
     }
-    if (!dob) {
-      setError('Please enter your Date of Birth');
-      return;
-    }
 
     setIsLoading(true);
     setError('');
 
     try {
-      const { candidate, tests } = await getAssignedTestsForCandidate(cleanId, dob);
+      const { candidate, tests } = await getAssignedTestsForCandidate(cleanId, dob ? dob.trim() : undefined);
 
       if (!candidate) {
         const allCandidates = await getCandidates();
         const foundById = allCandidates.find(c => c.id.trim() === cleanId);
-        if (foundById) {
-          setError(`Invalid Date of Birth for Registration ID #${cleanId}. Please check your birth date format (YYYY-MM-DD).`);
+        if (foundById && dob) {
+          setError(`Invalid Date of Birth for Registration ID #${cleanId}. Please check your birth date format (YYYY-MM-DD) or leave it empty to sign in directly.`);
         } else {
           setError(`Registration ID #${cleanId} not found in JJ Academy records. Please ask Admin to register your candidate profile.`);
         }
@@ -204,9 +200,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onCandidateLogin, onAd
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Date of Birth
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Date of Birth
+                </label>
+                <span className="text-[10px] text-slate-400 font-medium">Optional / Auto-match</span>
+              </div>
               <div className="relative flex items-center">
                 <Calendar className="w-4 h-4 text-blue-700 absolute left-3 pointer-events-none" />
                 <input

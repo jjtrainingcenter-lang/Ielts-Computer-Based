@@ -206,7 +206,6 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
           preload="auto"
           controls={false}
           controlsList="nodownload noplaybackrate noremoteplayback"
-          disablePictureInPicture
           onLoadedMetadata={handleLoadedMetadata}
           onTimeUpdate={handleTimeUpdate}
           onSeeking={handleSeeking}

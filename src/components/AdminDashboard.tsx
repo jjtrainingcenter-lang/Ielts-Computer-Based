@@ -2982,10 +2982,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                         isCorrect = false;
                       } else if (isMulti) {
                         const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
-                        const cSet = q.correctAnswer.split('|').map(s => s.trim().toLowerCase()).sort();
+                        const cRaw = Array.isArray(q.correctAnswer) ? q.correctAnswer : String(q.correctAnswer || '').split('|');
+                        const cSet = cRaw.map(s => s.trim().toLowerCase()).sort();
                         isCorrect = uSet.join('|') === cSet.join('|') && uSet.length > 0;
                       } else {
-                        const validAnswers = q.correctAnswer.split('|').map(s => s.trim().toLowerCase());
+                        const cRaw = Array.isArray(q.correctAnswer) ? q.correctAnswer : String(q.correctAnswer || '').split('|');
+                        const validAnswers = cRaw.map(s => s.trim().toLowerCase());
                         isCorrect = validAnswers.includes(userAns.trim().toLowerCase());
                       }
 
@@ -3057,10 +3059,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                         isCorrect = false;
                       } else if (isMulti) {
                         const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
-                        const cSet = q.correctAnswer.split('|').map(s => s.trim().toLowerCase()).sort();
+                        const cRaw = Array.isArray(q.correctAnswer) ? q.correctAnswer : String(q.correctAnswer || '').split('|');
+                        const cSet = cRaw.map(s => s.trim().toLowerCase()).sort();
                         isCorrect = uSet.join('|') === cSet.join('|') && uSet.length > 0;
                       } else {
-                        const validAnswers = q.correctAnswer.split('|').map(s => s.trim().toLowerCase());
+                        const cRaw = Array.isArray(q.correctAnswer) ? q.correctAnswer : String(q.correctAnswer || '').split('|');
+                        const validAnswers = cRaw.map(s => s.trim().toLowerCase());
                         isCorrect = validAnswers.includes(userAns.trim().toLowerCase());
                       }
 

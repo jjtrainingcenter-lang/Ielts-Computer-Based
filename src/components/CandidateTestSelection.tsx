@@ -119,7 +119,7 @@ export const CandidateTestSelection: React.FC<CandidateTestSelectionProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {availableTests.map((test) => (
+              {(availableTests || []).filter(Boolean).map((test) => (
                 <div
                   key={test.id}
                   className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group hover:border-blue-300"
@@ -197,9 +197,9 @@ export const CandidateTestSelection: React.FC<CandidateTestSelectionProps> = ({
 
                   {/* Card Action Footer */}
                   {(() => {
-                    const result = candidateResults.find(r => r.testId === test.id);
+                    const result = (candidateResults || []).find(r => r && r.testId === test.id);
                     const isSubmitted = !!result;
-                    const allowedSections = result?.allowContinueSections || [];
+                    const allowedSections = Array.isArray(result?.allowContinueSections) ? result.allowContinueSections : [];
                     
                     return (
                       <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col space-y-3">
@@ -216,43 +216,46 @@ export const CandidateTestSelection: React.FC<CandidateTestSelectionProps> = ({
                               <ArrowRight className="w-4 h-4" />
                             </button>
                           )}
-                          {isSubmitted && allowedSections.length === 0 && (
+                          {isSubmitted && (
                             <div className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-xs font-bold">
                               <CheckCircle className="w-4 h-4" />
-                              <span>Submitted</span>
+                              <span>Test Submitted</span>
                             </div>
                           )}
                         </div>
                         
                         {isSubmitted && allowedSections.length > 0 && (
-                          <div className="pt-2 border-t border-slate-200">
-                            <div className="text-xs font-bold text-amber-700 mb-2 flex items-center space-x-1">
-                              <AlertCircle className="w-3.5 h-3.5" />
-                              <span>Admin unlocked sections for continue:</span>
+                          <div className="pt-3 border-t border-slate-200 space-y-2">
+                            <div className="text-xs font-bold text-amber-800 flex items-center space-x-1.5 bg-amber-50 p-2 rounded border border-amber-200">
+                              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                              <span>Administrator authorized you to continue the following section(s):</span>
                             </div>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-2 pt-1">
                               {allowedSections.includes('listening') && (
                                 <button
                                   onClick={() => onResumeSection?.(test, result, 'listening')}
-                                  className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-xs font-bold rounded-md transition-colors"
+                                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors"
                                 >
-                                  Resume Listening
+                                  <Headphones className="w-3.5 h-3.5" />
+                                  <span>Resume Listening</span>
                                 </button>
                               )}
                               {allowedSections.includes('reading') && (
                                 <button
                                   onClick={() => onResumeSection?.(test, result, 'reading')}
-                                  className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold rounded-md transition-colors"
+                                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors"
                                 >
-                                  Resume Reading
+                                  <BookOpen className="w-3.5 h-3.5" />
+                                  <span>Resume Reading</span>
                                 </button>
                               )}
                               {allowedSections.includes('writing') && (
                                 <button
                                   onClick={() => onResumeSection?.(test, result, 'writing')}
-                                  className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold rounded-md transition-colors"
+                                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors"
                                 >
-                                  Resume Writing
+                                  <FileEdit className="w-3.5 h-3.5" />
+                                  <span>Resume Writing</span>
                                 </button>
                               )}
                             </div>
