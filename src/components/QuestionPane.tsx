@@ -4,6 +4,7 @@ import { ExamImageViewer } from './ExamImageViewer';
 import { HighlightSelectionWrapper } from './HighlightSelectionWrapper';
 import { HighlightText } from './HighlightText';
 import { HighlightPaletteBar } from './HighlightPaletteBar';
+import { HighlightColor } from '../lib/highlightColors';
 
 interface QuestionPaneProps {
   questions: Question[];
@@ -145,11 +146,28 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
     );
   };
 
+  const questionsContextId = isReadingSet ? 'reading_questions' : 'listening_questions';
+
+  const handlePaletteHighlight = (color: HighlightColor) => {
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) {
+      const text = sel.toString().trim();
+      if (text.length > 0 && onAddHighlight) {
+        onAddHighlight({
+          passageId: questionsContextId,
+          text,
+          color,
+        });
+        sel.removeAllRanges();
+      }
+    }
+  };
+
   const firstVisibleQuestion = displayedQuestions[0]?.questionNumber;
   const lastVisibleQuestion = displayedQuestions[displayedQuestions.length - 1]?.questionNumber;
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden">
+    <div className="flex flex-col h-full bg-white overflow-hidden select-text">
       {isReadingSet && displayedQuestions.length > 0 && (
         <div className="shrink-0 px-8 py-3 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center justify-between gap-4">
@@ -162,7 +180,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
               </p>
             </div>
             <div className="flex items-center space-x-3">
-              <HighlightPaletteBar compact />
+              <HighlightPaletteBar compact onChangeColor={handlePaletteHighlight} />
               <span className="text-[11px] font-semibold text-slate-500 bg-white border border-slate-200 rounded px-2.5 py-1">
                 Questions {firstVisibleQuestion}–{lastVisibleQuestion}
               </span>
@@ -181,14 +199,14 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
               · Question {currentQuestion.questionNumber} of {questions.length}
             </span>
           </div>
-          <HighlightPaletteBar compact />
+          <HighlightPaletteBar compact onChangeColor={handlePaletteHighlight} />
         </div>
       )}
 
       <HighlightSelectionWrapper
-        contextId={currentQuestion?.passageId || 'questions'}
+        contextId={questionsContextId}
         onAddHighlight={(highlight) => onAddHighlight && onAddHighlight(highlight)}
-        className="p-8 flex flex-col gap-10 overflow-y-auto flex-1 ielts-scroll"
+        className="p-8 flex flex-col gap-10 overflow-y-auto flex-1 ielts-scroll select-text"
       >
         <div ref={containerRef} className="flex flex-col gap-10">
           {displayedQuestions.map((q, index) => {
@@ -209,10 +227,10 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
               {isNewGroup && (
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-4">
                   {q.groupInstruction && (
-                    <p className="font-bold text-slate-800 whitespace-pre-wrap">
+                    <p className="font-bold text-slate-800 whitespace-pre-wrap select-text">
                       <HighlightText
                         text={q.groupInstruction}
-                        contextId={currentQuestion?.passageId || 'questions'}
+                        contextId={questionsContextId}
                         highlights={highlights}
                         onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                         onUpdateHighlight={onUpdateHighlight}
@@ -232,10 +250,10 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
               )}
 
               {isNewInstruction && (
-                <div className="text-sm font-semibold text-slate-800 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 whitespace-pre-wrap">
+                <div className="text-sm font-semibold text-slate-800 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 whitespace-pre-wrap select-text">
                   <HighlightText
                     text={q.instruction || ''}
-                    contextId={currentQuestion?.passageId || 'questions'}
+                    contextId={questionsContextId}
                     highlights={highlights}
                     onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                     onUpdateHighlight={onUpdateHighlight}
@@ -247,7 +265,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                 ref={(el) => {
                   questionRefs.current[index] = el;
                 }}
-                className="scroll-mt-32 flex flex-col"
+                className="scroll-mt-32 flex flex-col select-text"
               >
                 {q.media?.type === 'image' && q.media.url && (
                   <div className={`mb-4 flex flex-col items-start`}>
@@ -275,13 +293,13 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                   <span className="w-8 h-8 border border-[#00529b] text-[#00529b] text-[15px] flex items-center justify-center shrink-0 mr-3 mt-0.5 rounded-sm shadow-[2px_0_0_#00529b]">
                     {q.questionNumber}
                   </span>
-                  <div className={`text-black pt-1 flex-1 ${fontClass}`}>
+                  <div className={`text-black pt-1 flex-1 select-text ${fontClass}`}>
                     {isCompletion && hasInlineBlank(q.questionText)
                       ? renderInlineCompletion(q)
-                      : <span className="whitespace-pre-wrap">
+                      : <span className="whitespace-pre-wrap select-text">
                           <HighlightText
                             text={q.questionText}
-                            contextId={currentQuestion?.passageId || 'questions'}
+                            contextId={questionsContextId}
                             highlights={highlights}
                             onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                             onUpdateHighlight={onUpdateHighlight}
@@ -291,7 +309,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                 </div>
 
                 {(isSingleChoice || isMultiChoice) && (
-                  <div className="mt-4 space-y-3 pl-[3.25rem]">
+                  <div className="mt-4 space-y-3 pl-[3.25rem] select-text">
                     {hasOptions ? q.options!.map((opt) => {
                       const selectedValues = currentAnswer.split('|').filter(Boolean);
                       const isSelected = isMultiChoice ? selectedValues.includes(opt.value) : currentAnswer === opt.value;
@@ -307,28 +325,34 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                       };
 
                       return (
-                        <label
+                        <div
                           key={opt.value}
-                          onClick={(e) => { e.preventDefault(); handleToggle(); }}
-                          className="flex items-center cursor-pointer group"
+                          onClick={() => {
+                            const sel = window.getSelection();
+                            if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
+                              return; // User is selecting text to highlight, don't flip option
+                            }
+                            handleToggle();
+                          }}
+                          className="flex items-center cursor-pointer group select-text py-1"
                         >
                           <input
                             type={isMultiChoice ? 'checkbox' : 'radio'}
                             name={`q-${q.id}`}
                             checked={isSelected}
                             onChange={() => {}}
-                            className="w-[16px] h-[16px] border-gray-400 text-black focus:ring-0 cursor-pointer accent-black"
+                            className="w-[16px] h-[16px] border-gray-400 text-black focus:ring-0 cursor-pointer accent-black shrink-0"
                           />
-                          <span className="ml-3 text-[15px] text-black tracking-wide">
+                          <span className="ml-3 text-[15px] text-black tracking-wide select-text">
                             <HighlightText
                               text={opt.label || ''}
-                              contextId={currentQuestion?.passageId || 'questions'}
+                              contextId={questionsContextId}
                               highlights={highlights}
                               onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                               onUpdateHighlight={onUpdateHighlight}
                             />
                           </span>
-                        </label>
+                        </div>
                       );
                     }) : (
                       <input
@@ -358,15 +382,15 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                 )}
 
                 {q.type === 'table-completion' && q.tableData && (
-                  <div className="mt-4 pl-[3.25rem] overflow-x-auto w-full">
-                    <table className="w-full min-w-[400px] border-collapse border border-[#444] text-[15px]">
+                  <div className="mt-4 pl-[3.25rem] overflow-x-auto w-full select-text">
+                    <table className="w-full min-w-[400px] border-collapse border border-[#444] text-[15px] select-text">
                       <thead>
                         <tr>
                           {q.tableData.headers.map((h, i) => (
-                            <th key={i} className="border border-[#444] p-2 bg-slate-100 font-bold text-left text-slate-800">
+                            <th key={i} className="border border-[#444] p-2 bg-slate-100 font-bold text-left text-slate-800 select-text">
                               <HighlightText
                                 text={h}
-                                contextId={currentQuestion?.passageId || 'questions'}
+                                contextId={questionsContextId}
                                 highlights={highlights}
                                 onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                                 onUpdateHighlight={onUpdateHighlight}
@@ -379,11 +403,11 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                         {q.tableData.rows.map((row, rIdx) => (
                           <tr key={rIdx}>
                             {row.map((cell, cIdx) => (
-                              <td key={cIdx} className="border border-[#444] p-2 align-top text-slate-800">
+                              <td key={cIdx} className="border border-[#444] p-2 align-top text-slate-800 select-text">
                                 {typeof cell === 'string' ? (
                                   <HighlightText
                                     text={cell}
-                                    contextId={currentQuestion?.passageId || 'questions'}
+                                    contextId={questionsContextId}
                                     highlights={highlights}
                                     onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                                     onUpdateHighlight={onUpdateHighlight}

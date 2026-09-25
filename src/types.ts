@@ -172,7 +172,13 @@ export interface CandidateTestResult {
   attemptNumber?: number;
   listeningScore: number;
   readingScore: number;
+  listeningBand?: number;
+  readingBand?: number;
   userAnswers?: Record<string, string>;
+  highlights?: HighlightItem[];
+  readingHighlights?: HighlightItem[];
+  status?: 'in-progress' | 'completed' | 'reading-completed';
+  completedSections?: TestSection[];
   writingTask1?: string;
   writingTask2?: string;
   writingBand?: number;

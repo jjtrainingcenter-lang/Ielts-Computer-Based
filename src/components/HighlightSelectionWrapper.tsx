@@ -25,28 +25,49 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
   const handleMouseUp = () => {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) {
-      setSelectedText('');
-      setPopoverPos(null);
       return;
     }
 
     const text = selection.toString().trim();
     if (text.length > 0) {
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      setSelectedText(text);
-      setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 5 });
+      try {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        setSelectedText(text);
+        setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+      } catch (e) {}
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) {
+      const text = selection.toString().trim();
+      if (text.length > 0) {
+        e.preventDefault();
+        setSelectedText(text);
+        setPopoverPos({ x: e.clientX, y: e.clientY - 10 });
+      }
     }
   };
 
   const handleApplyHighlight = (color?: HighlightColor) => {
     if (!selectedText) return;
     const resolvedColor = color || defaultColor || getStoredHighlightColor();
-    onAddHighlight({
-      passageId: contextId,
-      text: selectedText,
-      color: resolvedColor,
+
+    const segments = selectedText
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    segments.forEach((seg) => {
+      onAddHighlight({
+        passageId: contextId,
+        text: seg,
+        color: resolvedColor,
+      });
     });
+
     setSelectedText('');
     setPopoverPos(null);
     window.getSelection()?.removeAllRanges();
@@ -55,21 +76,33 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
   const handleAddNote = (noteContent: string, color?: HighlightColor) => {
     if (!selectedText) return;
     const resolvedColor = color || defaultColor || getStoredHighlightColor();
-    if (noteContent !== null) {
+
+    const segments = selectedText
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    segments.forEach((seg, idx) => {
       onAddHighlight({
         passageId: contextId,
-        text: selectedText,
+        text: seg,
         color: resolvedColor,
-        note: noteContent || 'Passage note',
+        note: idx === 0 ? (noteContent || 'Question note') : undefined,
       });
-    }
+    });
+
     setSelectedText('');
     setPopoverPos(null);
     window.getSelection()?.removeAllRanges();
   };
 
   return (
-    <div className={`relative ${className}`} onMouseUp={handleMouseUp} ref={containerRef}>
+    <div
+      className={`relative select-text ${className}`}
+      onMouseUp={handleMouseUp}
+      onContextMenu={handleContextMenu}
+      ref={containerRef}
+    >
       {children}
       {popoverPos && (
         <TextHighlighterPopover
@@ -77,10 +110,7 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
           y={popoverPos.y}
           defaultColor={defaultColor}
           onHighlight={(chosenColor) => handleApplyHighlight(chosenColor)}
-          onAddNote={(chosenColor) => {
-            const note = window.prompt('Enter your note for this text:');
-            if (note !== null) handleAddNote(note, chosenColor);
-          }}
+          onAddNote={(chosenColor, note) => handleAddNote(note || 'Question note', chosenColor)}
           onClose={() => {
             setSelectedText('');
             setPopoverPos(null);

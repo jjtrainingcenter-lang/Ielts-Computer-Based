@@ -1,6 +1,7 @@
 import React from 'react';
 import { Candidate, IELTSTest, CandidateTestResult, TestSection } from '../types';
-import { BookOpen, Headphones, FileEdit, Mic, Play, Clock, CheckCircle, ShieldCheck, User, LogOut, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { BookOpen, Headphones, FileEdit, Mic, Play, Clock, CheckCircle, ShieldCheck, User, LogOut, ArrowRight, Sparkles, AlertCircle, Eye, Award } from 'lucide-react';
+import { calculateIELTSBand } from '../lib/scoring';
 
 interface CandidateTestSelectionProps {
   candidate: Candidate;
@@ -9,6 +10,7 @@ interface CandidateTestSelectionProps {
   onSelectTest: (test: IELTSTest) => void;
   onLogout: () => void;
   onResumeSection?: (test: IELTSTest, result: CandidateTestResult, section: TestSection) => void;
+  onViewResults?: (test: IELTSTest, result: CandidateTestResult) => void;
 }
 
 export const CandidateTestSelection: React.FC<CandidateTestSelectionProps> = ({
@@ -17,7 +19,8 @@ export const CandidateTestSelection: React.FC<CandidateTestSelectionProps> = ({
   candidateResults = [],
   onSelectTest,
   onLogout,
-  onResumeSection
+  onResumeSection,
+  onViewResults
 }) => {
   return (
     <div className="min-h-screen bg-[#f0f4f8] flex flex-col font-sans select-none">
@@ -217,12 +220,70 @@ export const CandidateTestSelection: React.FC<CandidateTestSelectionProps> = ({
                             </button>
                           )}
                           {isSubmitted && (
-                            <div className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-xs font-bold">
-                              <CheckCircle className="w-4 h-4" />
-                              <span>Test Submitted</span>
+                            <div className="flex items-center space-x-2">
+                              {(() => {
+                                const lBand = result.listeningBand ?? calculateIELTSBand(result.listeningScore || 0, 'listening');
+                                const rBand = result.readingBand ?? calculateIELTSBand(result.readingScore || 0, 'reading');
+                                const overall = result.overallBand ?? (result.writingBand ? Math.round(((lBand + rBand + result.writingBand + 7.0) / 4) * 2) / 2 : Math.round(((lBand + rBand) / 2) * 2) / 2);
+                                return (
+                                  <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-[#214162] text-amber-300 rounded font-mono text-xs font-black">
+                                    <Award className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Band {overall.toFixed(1)}</span>
+                                  </div>
+                                );
+                              })()}
+                              <div className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-xs font-bold">
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                <span>Submitted</span>
+                              </div>
                             </div>
                           )}
                         </div>
+
+                        {/* Calculated Scores Breakdown for Student */}
+                        {isSubmitted && (
+                          <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-2 text-xs">
+                            <div className="flex items-center justify-between font-bold text-slate-700 text-[11px] uppercase tracking-wider border-b border-slate-100 pb-1.5">
+                              <span>Module Breakdown</span>
+                              <span className="text-slate-400 font-normal normal-case">Scores Calculated</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                              {(() => {
+                                const lBand = result.listeningBand ?? calculateIELTSBand(result.listeningScore || 0, 'listening');
+                                const rBand = result.readingBand ?? calculateIELTSBand(result.readingScore || 0, 'reading');
+                                return (
+                                  <>
+                                    <div className="p-1.5 bg-blue-50/60 rounded border border-blue-100">
+                                      <span className="text-[10px] text-blue-700 font-bold block">Listening</span>
+                                      <span className="font-mono font-black text-slate-800 text-xs">{result.listeningScore || 0}/40</span>
+                                      <span className="text-[10px] font-bold text-[#214162] block">Band {lBand.toFixed(1)}</span>
+                                    </div>
+                                    <div className="p-1.5 bg-emerald-50/60 rounded border border-emerald-100">
+                                      <span className="text-[10px] text-emerald-700 font-bold block">Reading</span>
+                                      <span className="font-mono font-black text-slate-800 text-xs">{result.readingScore || 0}/40</span>
+                                      <span className="text-[10px] font-bold text-[#214162] block">Band {rBand.toFixed(1)}</span>
+                                    </div>
+                                    <div className="p-1.5 bg-amber-50/60 rounded border border-amber-100">
+                                      <span className="text-[10px] text-amber-700 font-bold block">Writing</span>
+                                      <span className="text-[10px] font-bold text-slate-700 block mt-1">
+                                        {result.writingBand ? `Band ${result.writingBand.toFixed(1)}` : 'Teacher Graded'}
+                                      </span>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                            {onViewResults && (
+                              <button
+                                onClick={() => onViewResults(test, result)}
+                                className="w-full mt-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-[#214162] font-bold rounded text-xs transition-colors flex items-center justify-center space-x-1.5"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Review Answers & Results</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
                         
                         {isSubmitted && allowedSections.length > 0 && (
                           <div className="pt-3 border-t border-slate-200 space-y-2">

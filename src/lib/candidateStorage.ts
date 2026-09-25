@@ -327,16 +327,60 @@ export const subscribeToTests = (
   };
 };
 
+export const subscribeToTestResults = (
+  onChange: (results: CandidateTestResult[]) => void,
+): (() => void) => {
+  if (isConfigured && db) {
+    return onSnapshot(
+      collection(db, 'results'),
+      snapshot => {
+        const cloudResults = snapshot.docs.map(
+          d => ({ id: d.id, ...d.data() } as CandidateTestResult),
+        );
+        const sorted = cloudResults.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        );
+        try {
+          localStorage.setItem(LOCAL_RESULTS_KEY, JSON.stringify(sorted));
+        } catch (e) {}
+        onChange(sorted);
+      },
+      error => console.error('Test results live-sync failed', error),
+    );
+  }
+
+  let cancelled = false;
+  const poll = async () => {
+    if (cancelled) return;
+    onChange(await getAllTestResults());
+  };
+  poll();
+  const timer = window.setInterval(poll, 3000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
+};
+
 export const saveTestResult = async (result: CandidateTestResult): Promise<void> => {
+  const resultId = result.id || `res_${result.candidateId.replace(/\s+/g, '_')}_${result.testId.replace(/\s+/g, '_')}`;
   const resultWithId: CandidateTestResult = {
-    id: result.id || `res_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     ...result,
+    id: resultId,
   };
 
   try {
     const raw = localStorage.getItem(LOCAL_RESULTS_KEY);
     const results: CandidateTestResult[] = raw ? JSON.parse(raw) : [];
-    results.unshift(resultWithId);
+    const index = results.findIndex(
+      r => r.id === resultId ||
+        (r.candidateId === resultWithId.candidateId && r.testId === resultWithId.testId),
+    );
+    if (index >= 0) {
+      results[index] = { ...results[index], ...resultWithId };
+    } else {
+      results.unshift(resultWithId);
+    }
     localStorage.setItem(LOCAL_RESULTS_KEY, JSON.stringify(results));
   } catch (e) {
     console.error('Error saving local test result', e);
@@ -344,7 +388,7 @@ export const saveTestResult = async (result: CandidateTestResult): Promise<void>
 
   if (isConfigured && db) {
     try {
-      await setDoc(doc(db, 'results', resultWithId.id!), resultWithId);
+      await setDoc(doc(db, 'results', resultWithId.id!), resultWithId, { merge: true });
     } catch (e) {
       console.error('Error uploading test result to Firestore', e);
     }

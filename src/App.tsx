@@ -38,7 +38,8 @@ import {
   rememberAdminSession,
   hasRememberedAdminSession,
 } from './lib/firebase';
-import { HelpCircle, X, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react';
+import { HelpCircle, X, ChevronRight, ChevronLeft, CheckCircle, Headphones, BookOpen, FileEdit, Award, Eye, Clock, CheckCircle2 } from 'lucide-react';
+import { calculateTestScores, calculateIELTSBand } from './lib/scoring';
 
 interface StoredSession {
   candidate: Candidate | null;
@@ -152,6 +153,7 @@ export default function App() {
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
   const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [isTimeExpiredTransition, setIsTimeExpiredTransition] = useState(false);
 
   // Load all tests and sync candidate tests
   useEffect(() => {
@@ -327,14 +329,71 @@ export default function App() {
     }
   }, [currentQuestionIndex, activeSection, currentTest]);
 
+  const saveSectionProgress = async (completedSec: TestSection) => {
+    try {
+      const calculated = calculateTestScores(currentTest, userAnswers);
+      const listeningCorrect = calculated.listeningScore;
+      const readingCorrect = calculated.readingScore;
+      const listeningBand = calculated.listeningBand;
+      const readingBand = calculated.readingBand;
+
+      const readingHighlightsList = highlights.filter(
+        (h) =>
+          h.passageId?.startsWith('p') ||
+          h.passageId?.includes('reading') ||
+          h.passageId?.includes('p1') ||
+          h.passageId?.includes('p2') ||
+          h.passageId?.includes('p3') ||
+          h.passageId?.includes('t2-p') ||
+          h.passageId?.includes('t3-p')
+      );
+
+      const progressRecord: CandidateTestResult = {
+        id: `res_${(candidateId || candidate?.id || '000000').replace(/\s+/g, '_')}_${currentTest.id.replace(/\s+/g, '_')}`,
+        candidateId: candidateId || candidate?.id || '000000',
+        candidateName: candidateName || candidate?.name || 'Candidate',
+        candidateDob: candidate?.dob,
+        testId: currentTest.id,
+        testTitle: currentTest.title,
+        listeningScore: listeningCorrect,
+        readingScore: readingCorrect,
+        listeningBand: listeningBand,
+        readingBand: readingBand,
+        overallBand: calculated.autoGradedBand,
+        userAnswers: userAnswers,
+        highlights: highlights,
+        readingHighlights: readingHighlightsList,
+        status: completedSec === 'reading' ? 'reading-completed' : 'in-progress',
+        completedSections: [completedSec],
+        writingTask1: writingTask1,
+        writingTask2: writingTask2,
+        timestamp: new Date().toISOString(),
+      };
+
+      await saveTestResult(progressRecord);
+      setCandidateResults((prev) => {
+        const filtered = prev.filter((r) => r.testId !== currentTest.id);
+        return [...filtered, progressRecord];
+      });
+    } catch (e) {
+      console.error('Failed to sync section progress live', e);
+    }
+  };
+
   const handleSectionTimeExpired = () => {
     setIsTimerRunning(false);
+    setSectionDeadline(null);
+    if (activeSection === 'reading') {
+      saveSectionProgress('reading');
+    }
     const order: TestSection[] = ['listening', 'reading', 'writing'];
     const currentIdx = order.indexOf(activeSection);
     if (currentIdx < order.length - 1) {
+      setIsTimeExpiredTransition(true);
       setExamPhase('section_transition');
     } else {
-      setExamPhase('final_review');
+      // 1 hour or custom timer for the final section has ended -> close section and submit automatically
+      handleSubmitTest();
     }
   };
 
@@ -367,48 +426,65 @@ export default function App() {
 
   const handleSubmitTest = async () => {
     setIsTimerRunning(false);
-    setExamPhase('submitted');
-    setIsResultsModalOpen(true);
+    setSectionDeadline(null);
     localStorage.removeItem(SESSION_STORAGE_KEY);
-    
-    const checkCorrect = (q: any, userAns: string) => {
-      if (!userAns || !q.correctAnswer) return false;
-      const cAnsArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : q.correctAnswer.split('|');
-      if (q.type === 'multiple-response' || q.type === 'multiple-choice-multiple-answer') {
-        const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
-        const cSet = cAnsArr.map((s: string) => s.trim().toLowerCase()).sort();
-        return uSet.join('|') === cSet.join('|') && uSet.length > 0;
-      } else {
-        const validAnswers = cAnsArr.map((s: string) => s.trim().toLowerCase());
-        return validAnswers.includes(userAns.trim().toLowerCase());
-      }
-    };
 
-    let listeningCorrect = 0;
-    (currentTest.listeningQuestions || []).forEach(q => {
-      if (checkCorrect(q, userAnswers[q.id])) listeningCorrect++;
-    });
+    // Calculate score using unified scoring engine
+    const calculated = calculateTestScores(currentTest, userAnswers);
+    const listeningCorrect = calculated.listeningScore;
+    const readingCorrect = calculated.readingScore;
+    const listeningBand = calculated.listeningBand;
+    const readingBand = calculated.readingBand;
 
-    let readingCorrect = 0;
-    (currentTest.readingQuestions || []).forEach(q => {
-      if (checkCorrect(q, userAnswers[q.id])) readingCorrect++;
-    });
+    // Writing: per testing standards & user directive, no auto-calculation needed! Evaluated by IELTS teacher/examiner.
+    const writingBand = writingEval?.overallWritingBand ?? undefined;
+    const overallBand = writingBand
+      ? Math.round(((listeningBand + readingBand + writingBand + 7.0) / 4) * 2) / 2
+      : calculated.autoGradedBand;
 
-    await saveTestResult({
-      candidateId: candidateId || '000000',
-      candidateName: candidateName || 'Candidate',
+    const readingHighlightsList = highlights.filter(
+      (h) =>
+        h.passageId?.startsWith('p') ||
+        h.passageId?.includes('reading') ||
+        h.passageId?.includes('p1') ||
+        h.passageId?.includes('p2') ||
+        h.passageId?.includes('p3') ||
+        h.passageId?.includes('t2-p') ||
+        h.passageId?.includes('t3-p')
+    );
+
+    const resultRecord: CandidateTestResult = {
+      id: `res_${(candidateId || candidate?.id || '000000').replace(/\s+/g, '_')}_${currentTest.id.replace(/\s+/g, '_')}`,
+      candidateId: candidateId || candidate?.id || '000000',
+      candidateName: candidateName || candidate?.name || 'Candidate',
       candidateDob: candidate?.dob,
       testId: currentTest.id,
       testTitle: currentTest.title,
       listeningScore: listeningCorrect,
       readingScore: readingCorrect,
+      listeningBand: listeningBand,
+      readingBand: readingBand,
+      overallBand: overallBand,
       userAnswers: userAnswers,
+      highlights: highlights,
+      readingHighlights: readingHighlightsList,
+      status: 'completed',
+      completedSections: ['listening', 'reading', 'writing'],
       writingTask1: writingTask1,
       writingTask2: writingTask2,
       writingEvaluation: writingEval || undefined,
-      writingBand: writingEval?.overallWritingBand,
+      writingBand: writingBand,
       timestamp: new Date().toISOString()
+    };
+
+    await saveTestResult(resultRecord);
+
+    setCandidateResults((prev) => {
+      const filtered = prev.filter((r) => r.testId !== currentTest.id);
+      return [...filtered, resultRecord];
     });
+
+    setExamPhase('submitted');
   };
 
   const handleSelectSection = (sec: TestSection, resetTimer = true) => {
@@ -602,36 +678,59 @@ export default function App() {
     }
 
     return (
-      <CandidateTestSelection
-        candidate={candidate}
-        availableTests={assignedTests.length > 0 ? assignedTests : allAvailableTests}
-        candidateResults={candidateResults}
-        onSelectTest={handleSelectAssignedTest}
-        onLogout={handleLogout}
-        onResumeSection={(test, result, section) => {
-          setCurrentTest(test);
-          setCandidateName(candidate.name);
-          setCandidateId(candidate.id);
-          setActiveSection(section);
-          setUserAnswers(result.userAnswers || {});
-          setFlaggedQuestions({});
-          setHighlights([]);
-          setWritingTask1(result.writingTask1 || '');
-          setWritingTask2(result.writingTask2 || '');
-          if (section === 'writing') {
-            setActiveWritingTask(1);
-          }
-          
-          const sectionDuration = getSectionDurationSeconds(section, test, candidate);
-          setTimeRemainingSeconds(sectionDuration);
-          setSectionDeadline(Date.now() + sectionDuration * 1000);
-          setExamPhase('device_check');
-          setIsTimerRunning(false);
-          setIsSelectorModalOpen(false);
-          setIsSelectingTest(false);
-          setHasConfirmedInstructions(true);
-        }}
-      />
+      <>
+        <CandidateTestSelection
+          candidate={candidate}
+          availableTests={assignedTests.length > 0 ? assignedTests : allAvailableTests}
+          candidateResults={candidateResults}
+          onSelectTest={handleSelectAssignedTest}
+          onLogout={handleLogout}
+          onViewResults={(test, result) => {
+            setCurrentTest(test);
+            setUserAnswers(result.userAnswers || {});
+            setWritingTask1(result.writingTask1 || '');
+            setWritingTask2(result.writingTask2 || '');
+            setWritingEval(result.writingEvaluation || null);
+            setHighlights(result.highlights || result.readingHighlights || []);
+            setIsResultsModalOpen(true);
+          }}
+          onResumeSection={(test, result, section) => {
+            setCurrentTest(test);
+            setCandidateName(candidate.name);
+            setCandidateId(candidate.id);
+            setActiveSection(section);
+            setUserAnswers(result.userAnswers || {});
+            setFlaggedQuestions({});
+            setHighlights([]);
+            setWritingTask1(result.writingTask1 || '');
+            setWritingTask2(result.writingTask2 || '');
+            if (section === 'writing') {
+              setActiveWritingTask(1);
+            }
+            
+            const sectionDuration = getSectionDurationSeconds(section, test, candidate);
+            setTimeRemainingSeconds(sectionDuration);
+            setSectionDeadline(Date.now() + sectionDuration * 1000);
+            setExamPhase('device_check');
+            setIsTimerRunning(false);
+            setIsSelectorModalOpen(false);
+            setIsSelectingTest(false);
+            setHasConfirmedInstructions(true);
+          }}
+        />
+
+        <TestResultsModal
+          isOpen={isResultsModalOpen}
+          test={currentTest}
+          userAnswers={userAnswers}
+          writingTask1={writingTask1}
+          writingTask2={writingTask2}
+          writingEvaluation={writingEval}
+          highlights={highlights}
+          onClose={() => setIsResultsModalOpen(false)}
+          onRestartTest={() => handleStartTest(currentTest, candidateName, candidateId, 'reading')}
+        />
+      </>
     );
   }
 
@@ -681,7 +780,10 @@ export default function App() {
         <SectionTransition
           completedSection={activeSection}
           nextSection={nextSection}
+          isTimeExpired={isTimeExpiredTransition}
+          autoCountdown={5}
           onContinue={() => {
+            setIsTimeExpiredTransition(false);
             if (nextSection === 'submit') {
               handleSubmitTest();
             } else {
@@ -694,32 +796,128 @@ export default function App() {
     }
 
     if (examPhase === 'submitted') {
+      const calculated = calculateTestScores(currentTest, userAnswers);
+      const lBand = calculated.listeningBand;
+      const rBand = calculated.readingBand;
+      const autoBand = calculated.autoGradedBand;
+      const t1Words = (writingTask1 || '').trim() ? (writingTask1 || '').trim().split(/\s+/).length : 0;
+      const t2Words = (writingTask2 || '').trim() ? (writingTask2 || '').trim().split(/\s+/).length : 0;
+
       return (
         <div className="min-h-screen bg-[#f0f4f8] flex flex-col items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center space-y-4 border-t-8 border-emerald-600">
-            <CheckCircle className="w-12 h-12 text-emerald-600 mx-auto" />
-            <h2 className="text-xl font-bold text-slate-900">Exam Submitted Successfully</h2>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Your practice test answers have been saved and recorded. You can view your assigned tests or return to the login screen.
-            </p>
-            <div className="flex gap-2 justify-center pt-2">
-              <button
-                onClick={() => {
-                  setIsSelectingTest(true);
-                  setHasConfirmedInstructions(false);
-                }}
-                className="px-4 py-2 bg-[#214162] text-white rounded-lg text-xs font-bold hover:bg-[#1a334e]"
-              >
-                View Assigned Tests
-              </button>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold"
-              >
-                Log Out
-              </button>
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full border border-slate-200 overflow-hidden">
+            {/* Header */}
+            <div className="bg-[#214162] text-white p-6 text-center space-y-2">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center mx-auto border border-emerald-400/30">
+                <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+              </div>
+              <h2 className="text-xl font-bold tracking-tight">Exam Completed & Successfully Submitted</h2>
+              <p className="text-xs text-blue-200 font-mono">
+                Candidate: {candidateName || candidate?.name} (ID: {candidateId || candidate?.id}) • {currentTest.title}
+              </p>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-6 space-y-5">
+              {/* Overall Band Banner */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block">
+                    Calculated Overall Band (Auto-Graded)
+                  </span>
+                  <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                    Practice Assessment Score
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Calculated from your completed Listening and Reading sections.
+                  </p>
+                </div>
+                <div className="bg-[#214162] text-amber-300 px-5 py-3 rounded-xl text-center shadow-xs shrink-0">
+                  <span className="text-2xl font-black font-mono block">Band {autoBand.toFixed(1)}</span>
+                  <span className="text-[9px] font-bold text-blue-200 uppercase tracking-wider">Estimated Band</span>
+                </div>
+              </div>
+
+              {/* Module Scores Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Listening Card */}
+                <div className="p-3.5 bg-blue-50/60 border border-blue-100 rounded-xl space-y-1 text-center">
+                  <div className="flex items-center justify-center space-x-1 text-xs font-bold text-blue-800">
+                    <Headphones className="w-3.5 h-3.5" />
+                    <span>Listening</span>
+                  </div>
+                  <p className="text-2xl font-black font-mono text-[#214162]">{calculated.listeningScore}/40</p>
+                  <p className="text-xs font-bold text-blue-700">Band {lBand.toFixed(1)}</p>
+                </div>
+
+                {/* Reading Card */}
+                <div className="p-3.5 bg-emerald-50/60 border border-emerald-100 rounded-xl space-y-1 text-center">
+                  <div className="flex items-center justify-center space-x-1 text-xs font-bold text-emerald-800">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Reading</span>
+                  </div>
+                  <p className="text-2xl font-black font-mono text-[#214162]">{calculated.readingScore}/40</p>
+                  <p className="text-xs font-bold text-emerald-700">Band {rBand.toFixed(1)}</p>
+                </div>
+
+                {/* Writing Card */}
+                <div className="p-3.5 bg-amber-50/60 border border-amber-100 rounded-xl space-y-1 text-center">
+                  <div className="flex items-center justify-center space-x-1 text-xs font-bold text-amber-800">
+                    <FileEdit className="w-3.5 h-3.5" />
+                    <span>Writing</span>
+                  </div>
+                  <p className="text-xs font-bold text-amber-900 pt-1">Submitted to Teacher</p>
+                  <p className="text-[11px] text-slate-500">T1: {t1Words}w • T2: {t2Words}w</p>
+                </div>
+              </div>
+
+              {/* Writing Note per user prompt requirement */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start space-x-2">
+                <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Teacher Assessment:</strong> Writing tasks are preserved and forwarded to your IELTS instructor/examiner for manual evaluation; automatic score calculation is not required for writing.
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-2.5 justify-center">
+                <button
+                  onClick={() => setIsResultsModalOpen(true)}
+                  className="px-5 py-2.5 bg-[#214162] hover:bg-[#1a334e] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center space-x-2"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>Review Answers & Detailed TRF</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setIsSelectingTest(true);
+                    setHasConfirmedInstructions(false);
+                  }}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+                >
+                  View Assigned Tests
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="px-5 py-2.5 text-slate-500 hover:text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+                >
+                  Log Out
+                </button>
+              </div>
             </div>
           </div>
+
+          <TestResultsModal
+            isOpen={isResultsModalOpen}
+            test={currentTest}
+            userAnswers={userAnswers}
+            writingTask1={writingTask1}
+            writingTask2={writingTask2}
+            writingEvaluation={writingEval}
+            highlights={highlights}
+            onClose={() => setIsResultsModalOpen(false)}
+            onRestartTest={() => handleStartTest(currentTest, candidateName, candidateId, 'reading')}
+          />
         </div>
       );
     }
@@ -733,7 +931,7 @@ export default function App() {
     : undefined;
 
   return (
-    <div className={`h-screen w-screen flex flex-col font-sans ${themeClass} select-none overflow-hidden`}>
+    <div className={`h-screen w-screen flex flex-col font-sans ${themeClass} overflow-hidden`}>
       <ExamHeader
         candidateName={candidateName}
         candidateId={candidateId}
@@ -751,7 +949,7 @@ export default function App() {
         }}
       />
 
-      <div className="bg-white pt-2.5 px-6 pb-2 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs relative z-10">
+      <div className="bg-white pt-2.5 px-6 pb-2 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs relative z-10 select-none">
         <div className="flex items-center space-x-3 overflow-x-auto pb-1 sm:pb-0">
           <div className="px-4 py-2 rounded-lg text-sm font-bold bg-[#214162] text-white shadow-xs flex items-center space-x-2 shrink-0">
             <span className="capitalize">{activeSection} Section</span>
@@ -770,6 +968,9 @@ export default function App() {
             onClick={() => {
               if (window.confirm("Are you sure you want to finish this section early? You cannot return to it later.")) {
                 setIsTimerRunning(false);
+                if (activeSection === 'reading') {
+                  saveSectionProgress('reading');
+                }
                 const order: TestSection[] = ['listening', 'reading', 'writing'];
                 const currentIdx = order.indexOf(activeSection);
                 if (currentIdx < order.length - 1) {
@@ -984,6 +1185,7 @@ export default function App() {
         writingTask1={writingTask1}
         writingTask2={writingTask2}
         writingEvaluation={writingEval}
+        highlights={highlights}
         onClose={() => setIsResultsModalOpen(false)}
         onRestartTest={() => handleStartTest(currentTest, candidateName, candidateId, 'reading')}
       />

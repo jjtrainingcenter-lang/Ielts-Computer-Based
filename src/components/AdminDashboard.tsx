@@ -10,16 +10,18 @@ import {
   getAllTestResults,
   updateTestResult,
   deleteTestResult,
-  generateUniqueRegNumber
+  generateUniqueRegNumber,
+  subscribeToTestResults
 } from '../lib/candidateStorage';
-import { Candidate, IELTSTest, Question, ReadingPassage, CandidateTestResult, IELTSSectionTimers, WritingTaskData, TestSection } from '../types';
+import { getHighlightMarkClass } from '../lib/highlightColors';
+import { Candidate, IELTSTest, Question, ReadingPassage, CandidateTestResult, IELTSSectionTimers, WritingTaskData, TestSection, HighlightItem } from '../types';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { ValidationReportModal } from './ValidationReportModal';
 import {
   X, LogOut, Save, Plus, Trash2, UploadCloud, Edit3, Code, FileJson, Copy, Check,
   Users, BookOpen, Award, Sparkles, RefreshCw, CheckSquare, Square, Search, Filter, ShieldCheck, ChevronRight,
   Clock, Timer, Headphones, FileEdit, Mic, Settings2, Eye, FileText, CheckCircle2, XCircle, Printer, Download,
-  CheckCheck, PenTool, MessageSquare, AlertTriangle, ExternalLink
+  CheckCheck, PenTool, MessageSquare, AlertTriangle, ExternalLink, Highlighter
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -289,6 +291,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   // Results Tab Inspection State
   const [inspectingResult, setInspectingResult] = useState<CandidateTestResult | null>(null);
   const [inspectActiveTab, setInspectActiveTab] = useState<'writing' | 'listening' | 'reading' | 'trf'>('writing');
+  const [inspectReadingViewMode, setInspectReadingViewMode] = useState<'passages' | 'questions'>('passages');
+  const [inspectActivePassageIndex, setInspectActivePassageIndex] = useState<number>(0);
+  const [selectedHighlightNote, setSelectedHighlightNote] = useState<{ text: string; note: string; color: string } | null>(null);
   const [teacherTask1Band, setTeacherTask1Band] = useState<number>(7.0);
   const [teacherTask2Band, setTeacherTask2Band] = useState<number>(7.0);
   const [teacherOverallWritingBand, setTeacherOverallWritingBand] = useState<number>(7.0);
@@ -456,9 +461,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [bulkJsonText, setBulkJsonText] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // Load Data on Mount
+  // Load Data on Mount & Subscribe to Live Test Results
   useEffect(() => {
     refreshAllData();
+    const unsubscribeResults = subscribeToTestResults((liveResults) => {
+      setResultsList(liveResults);
+    });
+    return () => {
+      unsubscribeResults();
+    };
   }, []);
 
   const refreshAllData = async () => {
@@ -2541,6 +2552,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                             <td className="py-3 px-4">
                               <div className="font-bold text-emerald-700">{r.readingScore}/40</div>
                               <div className="text-[10px] text-slate-500 font-semibold">Band {rBand.toFixed(1)}</div>
+                              {((r.highlights?.length || 0) > 0 || (r.readingHighlights?.length || 0) > 0) && (
+                                <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 w-fit">
+                                  <Highlighter className="w-3 h-3 text-amber-600" />
+                                  <span>{(r.highlights?.length || r.readingHighlights?.length)} hl</span>
+                                </div>
+                              )}
+                              {r.status === 'reading-completed' && (
+                                <span className="mt-1 inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-bold">
+                                  Live: Reading Done
+                                </span>
+                              )}
                             </td>
 
                             <td className="py-3 px-4">
@@ -3025,81 +3047,440 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
               )}
 
               {/* 3. READING TAB */}
-              {inspectActiveTab === 'reading' && (
-                <div className="space-y-4">
-                  <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-900">Reading Test Performance Breakdown</h4>
-                      <p className="text-xs text-slate-500">Total Raw Score: {inspectingResult.readingScore} / 40 • Band {calculateBand(inspectingResult.readingScore || 0).toFixed(1)}</p>
-                    </div>
-                    <button
-                      onClick={() => handleToggleAllowContinue('reading')}
-                      className={`px-4 py-2 rounded font-bold text-xs flex items-center space-x-1.5 transition-colors border ${
-                        (inspectingResult.allowContinueSections || []).includes('reading')
-                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
-                          : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      {(inspectingResult.allowContinueSections || []).includes('reading') ? (
-                        <CheckSquare className="w-4 h-4" />
-                      ) : (
-                        <Square className="w-4 h-4" />
-                      )}
-                      <span>Allow Candidate to Continue Reading Section</span>
-                    </button>
-                  </div>
+              {inspectActiveTab === 'reading' && (() => {
+                const currentInspectedTest = allTests.find((t) => t.id === inspectingResult.testId);
+                const candidateHighlights: HighlightItem[] = inspectingResult.highlights || inspectingResult.readingHighlights || [];
+                const passages = currentInspectedTest?.readingPassages || [];
+                const activePassage = passages[inspectActivePassageIndex] || passages[0];
+                
+                // Filter highlights for this passage
+                const activePassageHighlights = activePassage
+                  ? candidateHighlights.filter(
+                      (h) =>
+                        h.passageId === activePassage.id ||
+                        h.passageId === `p${activePassage.partNumber}` ||
+                        (!h.passageId && activePassage.partNumber === 1)
+                    )
+                  : [];
 
-                  <div className="space-y-2">
-                    {allTests.find(t => t.id === inspectingResult.testId)?.readingQuestions?.map((q) => {
-                      const userAns = inspectingResult.userAnswers?.[q.id] || '';
-                      
-                      const isMulti = q.type === 'multiple-response';
-                      let isCorrect = false;
-                      if (!userAns) {
-                        isCorrect = false;
-                      } else if (isMulti) {
-                        const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
-                        const cRaw = Array.isArray(q.correctAnswer) ? q.correctAnswer : String(q.correctAnswer || '').split('|');
-                        const cSet = cRaw.map(s => s.trim().toLowerCase()).sort();
-                        isCorrect = uSet.join('|') === cSet.join('|') && uSet.length > 0;
-                      } else {
-                        const cRaw = Array.isArray(q.correctAnswer) ? q.correctAnswer : String(q.correctAnswer || '').split('|');
-                        const validAnswers = cRaw.map(s => s.trim().toLowerCase());
-                        isCorrect = validAnswers.includes(userAns.trim().toLowerCase());
+                const notesCount = candidateHighlights.filter((h) => h.note && h.note.trim().length > 0).length;
+
+                const renderInspectedText = (text: string) => {
+                  if (!text || activePassageHighlights.length === 0) return text;
+                  
+                  interface TextChunk {
+                    text: string;
+                    isHighlight: boolean;
+                    id: string;
+                    note: string;
+                    color: string;
+                  }
+
+                  let parts: TextChunk[] = [{ text, isHighlight: false, id: '', note: '', color: '' }];
+                  const sorted = [...activePassageHighlights].sort((a, b) => b.text.length - a.text.length);
+
+                  sorted.forEach((hl) => {
+                    const newParts: TextChunk[] = [];
+                    parts.forEach((part) => {
+                      if (part.isHighlight) {
+                        newParts.push(part);
+                        return;
                       }
 
-                      return (
-                        <div key={q.id} className="p-3.5 bg-white rounded-lg border border-slate-200 flex items-start justify-between gap-4">
-                          <div className="space-y-1 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-slate-100 text-slate-700 font-mono">
-                                Q{q.questionNumber}
-                              </span>
-                              <span className="font-semibold text-slate-800 text-xs">{q.questionText}</span>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs pt-1">
-                              <span>Candidate Answer: <strong className="text-slate-900 font-mono">{userAns || '<No Answer>'}</strong></span>
-                              <span>Correct Answer: <strong className="text-emerald-700 font-mono">{q.correctAnswer}</strong></span>
-                            </div>
-                          </div>
+                      let remaining = part.text;
+                      const searchStr = hl.text.toLowerCase();
 
-                          <div>
-                            {isCorrect ? (
-                              <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded font-bold text-[11px] flex items-center gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5" /> Correct
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 bg-red-100 text-red-800 rounded font-bold text-[11px] flex items-center gap-1">
-                                <XCircle className="w-3.5 h-3.5" /> Incorrect
-                              </span>
-                            )}
-                          </div>
+                      while (remaining.length > 0) {
+                        const idx = remaining.toLowerCase().indexOf(searchStr);
+                        if (idx === -1) {
+                          newParts.push({ text: remaining, isHighlight: false, id: '', note: '', color: '' });
+                          break;
+                        }
+
+                        if (idx > 0) {
+                          newParts.push({ text: remaining.slice(0, idx), isHighlight: false, id: '', note: '', color: '' });
+                        }
+                        newParts.push({
+                          text: remaining.slice(idx, idx + hl.text.length),
+                          isHighlight: true,
+                          id: hl.id,
+                          note: hl.note || '',
+                          color: hl.color || 'yellow',
+                        });
+                        remaining = remaining.slice(idx + hl.text.length);
+                      }
+                    });
+                    parts = newParts.filter((p) => p.text.length > 0);
+                  });
+
+                  return (
+                    <>
+                      {parts.map((p, i) => {
+                        if (p.isHighlight) {
+                          const markCls = getHighlightMarkClass(p.color);
+                          return (
+                            <mark
+                              key={`${p.id}-${i}`}
+                              className={`${markCls} px-1 py-0.5 rounded cursor-pointer transition-transform hover:scale-[1.01] inline-block font-medium`}
+                              onClick={() => setSelectedHighlightNote({ text: p.text, note: p.note, color: p.color })}
+                              title={p.note ? `Candidate Note: ${p.note}` : `Candidate Highlight (${p.color})`}
+                            >
+                              {p.text}
+                              {p.note && (
+                                <span className="inline-block w-2 h-2 ml-1 align-top bg-blue-600 rounded-full border border-white" />
+                              )}
+                            </mark>
+                          );
+                        }
+                        return <span key={i}>{p.text}</span>;
+                      })}
+                    </>
+                  );
+                };
+
+                return (
+                  <div className="space-y-4">
+                    {/* Top Control Bar */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-sm text-slate-900">Reading Test Performance &amp; Candidate Highlights</h4>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            Score: {inspectingResult.readingScore} / 40 (Band {calculateBand(inspectingResult.readingScore || 0).toFixed(1)})
+                          </span>
+                          {candidateHighlights.length > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                              <Highlighter className="w-3 h-3 text-amber-700" />
+                              <span>{candidateHighlights.length} Highlights · {notesCount} Notes</span>
+                            </span>
+                          )}
                         </div>
-                      );
-                    })}
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          View the full reading passages with the candidate&apos;s highlighted phrases, annotations, and answered questions.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleToggleAllowContinue('reading')}
+                          className={`px-3 py-1.5 rounded font-bold text-xs flex items-center space-x-1.5 transition-colors border ${
+                            (inspectingResult.allowContinueSections || []).includes('reading')
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {(inspectingResult.allowContinueSections || []).includes('reading') ? (
+                            <CheckSquare className="w-4 h-4 text-emerald-700" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                          <span>Allow Continue</span>
+                        </button>
+
+                        <div className="bg-slate-100 p-0.5 rounded-lg flex items-center border border-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => setInspectReadingViewMode('passages')}
+                            className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                              inspectReadingViewMode === 'passages'
+                                ? 'bg-white text-[#214162] shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            📖 Passages &amp; Highlights
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInspectReadingViewMode('questions')}
+                            className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                              inspectReadingViewMode === 'questions'
+                                ? 'bg-white text-[#214162] shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            📋 Questions (Q1–Q40)
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Selected Highlight Note Dialog */}
+                    {selectedHighlightNote && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start justify-between gap-3 text-xs text-amber-950 shadow-xs animate-in fade-in duration-150">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-bold text-amber-900">Student Highlight Note:</span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-amber-200/60 uppercase">
+                              Color: {selectedHighlightNote.color}
+                            </span>
+                          </div>
+                          <p className="italic text-amber-900">&ldquo;{selectedHighlightNote.text}&rdquo;</p>
+                          <p className="font-semibold text-slate-800 pt-0.5">
+                            {selectedHighlightNote.note || 'No custom text note added.'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedHighlightNote(null)}
+                          className="text-amber-700 hover:text-amber-950 p-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* MODE 1: PASSAGES & HIGHLIGHTS VIEW */}
+                    {inspectReadingViewMode === 'passages' && (
+                      <div className="space-y-4">
+                        {/* Passage Navigation Tabs */}
+                        <div className="flex items-center space-x-2 border-b border-slate-200 pb-2 overflow-x-auto">
+                          {passages.map((p, pIdx) => {
+                            const pHLCount = candidateHighlights.filter(
+                              (h) =>
+                                h.passageId === p.id ||
+                                h.passageId === `p${p.partNumber}` ||
+                                (!h.passageId && p.partNumber === 1)
+                            ).length;
+                            return (
+                              <button
+                                key={p.id || pIdx}
+                                type="button"
+                                onClick={() => setInspectActivePassageIndex(pIdx)}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center space-x-2 transition-all ${
+                                  inspectActivePassageIndex === pIdx
+                                    ? 'bg-[#214162] text-white shadow-xs'
+                                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                                }`}
+                              >
+                                <span>Reading Passage {p.partNumber}</span>
+                                {pHLCount > 0 && (
+                                  <span
+                                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                                      inspectActivePassageIndex === pIdx
+                                        ? 'bg-amber-400 text-slate-900'
+                                        : 'bg-amber-100 text-amber-900'
+                                    }`}
+                                  >
+                                    {pHLCount} highlights
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Passage Display Container with highlights */}
+                        {activePassage ? (
+                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                            {/* Left / Main Passage Text */}
+                            <div className="lg:col-span-8 bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4 max-h-[650px] overflow-y-auto ielts-scroll">
+                              <div className="border-b border-slate-100 pb-3">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#214162]">
+                                  Passage {activePassage.partNumber}
+                                </span>
+                                <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                                  {renderInspectedText(activePassage.title)}
+                                </h3>
+                                {activePassage.subtitle && (
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    {renderInspectedText(activePassage.subtitle)}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="space-y-4 text-xs leading-relaxed text-slate-800">
+                                {activePassage.paragraphs.map((p, idx) => {
+                                  if (p.type === 'heading') {
+                                    return (
+                                      <h4 key={p.id || idx} className="text-sm font-bold text-slate-900 mt-4 mb-2">
+                                        {renderInspectedText(p.text || '')}
+                                      </h4>
+                                    );
+                                  }
+                                  if (p.type === 'table') {
+                                    return (
+                                      <div key={p.id || idx} className="my-3 overflow-x-auto border border-slate-200 rounded p-2 bg-slate-50">
+                                        <pre className="text-xs font-mono whitespace-pre-wrap text-slate-800">
+                                          {renderInspectedText(p.text || '')}
+                                        </pre>
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <p key={p.id || idx} className="leading-relaxed">
+                                      {renderInspectedText(p.text || '')}
+                                    </p>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Right Pane: Highlights List & Passage Questions */}
+                            <div className="lg:col-span-4 space-y-4">
+                              {/* Highlights Sidebar */}
+                              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3 max-h-[300px] overflow-y-auto">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                  <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                                    <Highlighter className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Highlights in this Passage ({activePassageHighlights.length})</span>
+                                  </span>
+                                </div>
+
+                                {activePassageHighlights.length === 0 ? (
+                                  <p className="text-xs text-slate-400 italic py-2">
+                                    No highlights made by the candidate in this passage.
+                                  </p>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {activePassageHighlights.map((h) => {
+                                      const markCls = getHighlightMarkClass(h.color);
+                                      return (
+                                        <div
+                                          key={h.id}
+                                          onClick={() => setSelectedHighlightNote({ text: h.text, note: h.note || '', color: h.color })}
+                                          className="p-2 rounded-lg border border-slate-200 bg-slate-50/80 hover:bg-slate-100 cursor-pointer transition-colors space-y-1"
+                                        >
+                                          <div className="flex items-center justify-between gap-1">
+                                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${markCls}`}>
+                                              {h.color}
+                                            </span>
+                                            {h.note && (
+                                              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1 rounded">
+                                                Note
+                                              </span>
+                                            )}
+                                          </div>
+                                          <p className="text-xs text-slate-800 line-clamp-2 italic font-medium">
+                                            &ldquo;{h.text}&rdquo;
+                                          </p>
+                                          {h.note && (
+                                            <p className="text-[11px] text-slate-600 pt-0.5">
+                                              📝 {h.note}
+                                            </p>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Questions for this passage */}
+                              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3 max-h-[330px] overflow-y-auto">
+                                <div className="border-b border-slate-100 pb-2">
+                                  <span className="font-bold text-xs text-slate-800">
+                                    Passage {activePassage.partNumber} Questions
+                                  </span>
+                                </div>
+                                <div className="space-y-2">
+                                  {(currentInspectedTest?.readingQuestions || [])
+                                    .filter((q) => q.partNumber === activePassage.partNumber || q.passageId === activePassage.id)
+                                    .map((q) => {
+                                      const uAns = inspectingResult.userAnswers?.[q.id] || '';
+                                      const isMulti = q.type === 'multiple-response';
+                                      let isCorrect = false;
+                                      if (!uAns) {
+                                        isCorrect = false;
+                                      } else if (isMulti) {
+                                        const uSet = uAns.split('|').map((s) => s.trim().toLowerCase()).sort();
+                                        const cRaw = Array.isArray(q.correctAnswer) ? q.correctAnswer : String(q.correctAnswer || '').split('|');
+                                        const cSet = cRaw.map((s) => s.trim().toLowerCase()).sort();
+                                        isCorrect = uSet.join('|') === cSet.join('|') && uSet.length > 0;
+                                      } else {
+                                        const cRaw = Array.isArray(q.correctAnswer) ? q.correctAnswer : String(q.correctAnswer || '').split('|');
+                                        const validAnswers = cRaw.map((s) => s.trim().toLowerCase());
+                                        isCorrect = validAnswers.includes(uAns.trim().toLowerCase());
+                                      }
+
+                                      return (
+                                        <div key={q.id} className="p-2 rounded bg-slate-50 border border-slate-200 space-y-1">
+                                          <div className="flex items-center justify-between">
+                                            <span className="font-bold font-mono text-[10px] text-slate-700">Q{q.questionNumber}</span>
+                                            {isCorrect ? (
+                                              <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-0.5">
+                                                <CheckCircle2 className="w-3 h-3" /> Correct
+                                              </span>
+                                            ) : (
+                                              <span className="text-[10px] font-bold text-red-600 flex items-center gap-0.5">
+                                                <XCircle className="w-3 h-3" /> Incorrect
+                                              </span>
+                                            )}
+                                          </div>
+                                          <p className="text-[11px] text-slate-700 truncate">{q.questionText}</p>
+                                          <div className="text-[10px] flex items-center justify-between pt-0.5">
+                                            <span className="text-slate-500">Ans: <strong className="text-slate-900">{uAns || '<Blank>'}</strong></span>
+                                            <span className="text-slate-500">Key: <strong className="text-emerald-700">{Array.isArray(q.correctAnswer) ? q.correctAnswer.join(', ') : q.correctAnswer}</strong></span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200">
+                            No reading passages found for this test.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* MODE 2: QUESTIONS LIST VIEW (Q1–Q40) */}
+                    {inspectReadingViewMode === 'questions' && (
+                      <div className="space-y-2">
+                        {currentInspectedTest?.readingQuestions?.map((q) => {
+                          const userAns = inspectingResult.userAnswers?.[q.id] || '';
+                          
+                          const isMulti = q.type === 'multiple-response';
+                          let isCorrect = false;
+                          if (!userAns) {
+                            isCorrect = false;
+                          } else if (isMulti) {
+                            const uSet = userAns.split('|').map((s) => s.trim().toLowerCase()).sort();
+                            const cRaw = Array.isArray(q.correctAnswer) ? q.correctAnswer : String(q.correctAnswer || '').split('|');
+                            const cSet = cRaw.map((s) => s.trim().toLowerCase()).sort();
+                            isCorrect = uSet.join('|') === cSet.join('|') && uSet.length > 0;
+                          } else {
+                            const cRaw = Array.isArray(q.correctAnswer) ? q.correctAnswer : String(q.correctAnswer || '').split('|');
+                            const validAnswers = cRaw.map((s) => s.trim().toLowerCase());
+                            isCorrect = validAnswers.includes(userAns.trim().toLowerCase());
+                          }
+
+                          return (
+                            <div key={q.id} className="p-3.5 bg-white rounded-lg border border-slate-200 flex items-start justify-between gap-4">
+                              <div className="space-y-1 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-slate-100 text-slate-700 font-mono">
+                                    Q{q.questionNumber}
+                                  </span>
+                                  <span className="font-semibold text-slate-800 text-xs">{q.questionText}</span>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs pt-1">
+                                  <span>Candidate Answer: <strong className="text-slate-900 font-mono">{userAns || '<No Answer>'}</strong></span>
+                                  <span>Correct Answer: <strong className="text-emerald-700 font-mono">{Array.isArray(q.correctAnswer) ? q.correctAnswer.join(', ') : q.correctAnswer}</strong></span>
+                                </div>
+                              </div>
+
+                              <div>
+                                {isCorrect ? (
+                                  <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded font-bold text-[11px] flex items-center gap-1">
+                                    <CheckCircle2 className="w-3.5 h-3.5" /> Correct
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-1 bg-red-100 text-red-800 rounded font-bold text-[11px] flex items-center gap-1">
+                                    <XCircle className="w-3.5 h-3.5" /> Incorrect
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* 4. TRF CERTIFICATE TAB */}
               {inspectActiveTab === 'trf' && (

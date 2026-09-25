@@ -42,27 +42,50 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
   const handleMouseUp = () => {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) {
-      setSelectedText('');
-      setPopoverPos(null);
       return;
     }
     const text = selection.toString().trim();
     if (text.length > 0) {
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      setSelectedText(text);
-      setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 5 });
+      try {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        setSelectedText(text);
+        setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+      } catch (e) {}
     }
   };
 
-  const handleApplyHighlight = (color?: HighlightColor) => {
-    if (!selectedText) return;
+  const handleContextMenu = (e: React.MouseEvent) => {
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) {
+      const text = selection.toString().trim();
+      if (text.length > 0) {
+        e.preventDefault();
+        setSelectedText(text);
+        setPopoverPos({ x: e.clientX, y: e.clientY - 10 });
+      }
+    }
+  };
+
+  const handleApplyHighlight = (color?: HighlightColor, textToHighlight?: string) => {
+    const targetText = (textToHighlight || selectedText || '').trim();
+    if (!targetText) return;
     const resolvedColor = color || activeHighlightColor;
-    onAddHighlight({
-      passageId: currentPassage.id,
-      text: selectedText,
-      color: resolvedColor,
+
+    // Support single and multi-line selections seamlessly
+    const segments = targetText
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    segments.forEach((seg) => {
+      onAddHighlight({
+        passageId: currentPassage.id,
+        text: seg,
+        color: resolvedColor,
+      });
     });
+
     setSelectedText('');
     setPopoverPos(null);
     window.getSelection()?.removeAllRanges();
@@ -71,17 +94,37 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
   const handleAddNote = (noteContent: string, color?: HighlightColor) => {
     if (!selectedText) return;
     const resolvedColor = color || activeHighlightColor;
-    if (noteContent !== null) {
+    
+    const segments = selectedText
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    segments.forEach((seg, idx) => {
       onAddHighlight({
         passageId: currentPassage.id,
-        text: selectedText,
+        text: seg,
         color: resolvedColor,
-        note: noteContent || 'Passage note',
+        note: idx === 0 ? (noteContent || 'Passage note') : undefined,
       });
-    }
+    });
+
     setSelectedText('');
     setPopoverPos(null);
     window.getSelection()?.removeAllRanges();
+  };
+
+  const handlePaletteColorChange = (col: HighlightColor) => {
+    setActiveHighlightColor(col);
+    setStoredHighlightColor(col);
+    // If text is currently selected, highlight it immediately with the chosen color!
+    const selection = window.getSelection();
+    const currentSelText = selection ? selection.toString().trim() : '';
+    if (currentSelText.length > 0) {
+      handleApplyHighlight(col, currentSelText);
+    } else if (selectedText.length > 0) {
+      handleApplyHighlight(col, selectedText);
+    }
   };
 
   const fontClass =
@@ -197,10 +240,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
         {/* Color Palette bar */}
         <HighlightPaletteBar
           activeColor={activeHighlightColor}
-          onChangeColor={(col) => {
-            setActiveHighlightColor(col);
-            setStoredHighlightColor(col);
-          }}
+          onChangeColor={handlePaletteColorChange}
           highlightCount={passageHighlights.length}
         />
       </div>
@@ -208,11 +248,14 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
       <div
         ref={passageRef}
         onMouseUp={handleMouseUp}
-        className={`flex-1 overflow-y-auto px-8 sm:px-10 py-8 space-y-6 ${fontClass} text-black selection:bg-[#2060b2] selection:text-white ielts-scroll`}
+        onContextMenu={handleContextMenu}
+        className={`flex-1 overflow-y-auto px-8 sm:px-10 py-8 space-y-6 ${fontClass} text-black select-text selection:bg-[#2060b2] selection:text-white ielts-scroll`}
       >
-        <h3 className="text-xl font-bold text-black mb-4">{currentPassage.title}</h3>
+        <h3 className="text-xl font-bold text-black mb-4 select-text">
+          {renderHighlightedText(currentPassage.title)}
+        </h3>
 
-        <div className="space-y-4">
+        <div className="space-y-4 select-text">
           {currentPassage.paragraphs.map((p, idx) => {
             if (p.type === 'image' && p.imageUrl) {
               return (
@@ -253,10 +296,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
           y={popoverPos.y}
           defaultColor={activeHighlightColor}
           onHighlight={(color) => handleApplyHighlight(color)}
-          onAddNote={(color) => {
-            const note = window.prompt('Enter your note for this text:');
-            if (note !== null) handleAddNote(note, color);
-          }}
+          onAddNote={(color, note) => handleAddNote(note || 'Passage note', color)}
           onClose={() => {
             setSelectedText('');
             setPopoverPos(null);

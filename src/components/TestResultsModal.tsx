@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { IELTSTest, WritingEvaluation, SpeakingEvaluation } from '../types';
-import { Award, CheckCircle2, XCircle, FileText, Sparkles, Download, RotateCcw, ChevronDown, ChevronUp, Printer } from 'lucide-react';
+import { IELTSTest, WritingEvaluation, SpeakingEvaluation, HighlightItem } from '../types';
+import { Award, CheckCircle2, XCircle, FileText, Sparkles, Download, RotateCcw, ChevronDown, ChevronUp, Printer, Clock, Highlighter, BookOpen } from 'lucide-react';
+import { checkQuestionCorrect, calculateTestScores, calculateIELTSBand } from '../lib/scoring';
+import { getHighlightMarkClass } from '../lib/highlightColors';
 
 interface TestResultsModalProps {
   isOpen: boolean;
@@ -10,6 +12,7 @@ interface TestResultsModalProps {
   writingTask2: string;
   writingEvaluation?: WritingEvaluation | null;
   speakingEvaluation?: SpeakingEvaluation | null;
+  highlights?: HighlightItem[];
   onClose: () => void;
   onRestartTest: () => void;
 }
@@ -22,63 +25,37 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
   writingTask2,
   writingEvaluation,
   speakingEvaluation,
+  highlights = [],
   onClose,
   onRestartTest,
 }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'listening' | 'reading' | 'writing' | 'trf'>('summary');
   const [expandedExplanation, setExpandedExplanation] = useState<string | null>(null);
+  const [readingViewMode, setReadingViewMode] = useState<'questions' | 'passages'>('questions');
+  const [activePassageIndex, setActivePassageIndex] = useState(0);
 
   if (!isOpen) return null;
 
-  // Helper for scoring
-  const checkCorrect = (q: any, userAns: string) => {
-    if (!userAns || !q.correctAnswer) return false;
-    const cAnsArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : q.correctAnswer.split('|');
-    if (q.type === 'multiple-response') {
-      const uSet = userAns.split('|').map(s => s.trim().toLowerCase()).sort();
-      const cSet = cAnsArr.map((s: string) => s.trim().toLowerCase()).sort();
-      return uSet.join('|') === cSet.join('|') && uSet.length > 0;
-    } else {
-      const validAnswers = cAnsArr.map((s: string) => s.trim().toLowerCase());
-      return validAnswers.includes(userAns.trim().toLowerCase());
-    }
-  };
+  // Use unified scoring library
+  const scores = calculateTestScores(test, userAnswers);
+  const listeningScore = scores.listeningScore;
+  const readingScore = scores.readingScore;
+  const listeningTotal = scores.listeningTotal;
+  const readingTotal = scores.readingTotal;
+  const listeningBand = scores.listeningBand;
+  const readingBand = scores.readingBand;
 
-  // Calculate Listening Score & Band
-  const listeningScore = (test.listeningQuestions || []).reduce((acc, q) => {
-    return checkCorrect(q, userAnswers[q.id]) ? acc + 1 : acc;
-  }, 0);
+  const writingBand = writingEvaluation?.overallWritingBand ?? null;
+  const speakingBand = speakingEvaluation?.speakingBand ?? null;
 
-  // Calculate Reading Score & Band
-  const readingScore = (test.readingQuestions || []).reduce((acc, q) => {
-    return checkCorrect(q, userAnswers[q.id]) ? acc + 1 : acc;
-  }, 0);
+  // Overall Band Score calculation:
+  // If writing has been graded by examiner, include it; otherwise show auto-graded band of Listening & Reading
+  const overallBand = writingBand
+    ? Math.round(((listeningBand + readingBand + writingBand + (speakingBand || 7.0)) / 4) * 2) / 2
+    : scores.autoGradedBand;
 
-  // Score to IELTS Band Conversion Table (Academic)
-  const getBandFromScore = (score: number, total: number = 40): number => {
-    const ratio = score / total;
-    if (ratio >= 0.95) return 9.0;
-    if (ratio >= 0.88) return 8.5;
-    if (ratio >= 0.82) return 8.0;
-    if (ratio >= 0.75) return 7.5;
-    if (ratio >= 0.68) return 7.0;
-    if (ratio >= 0.58) return 6.5;
-    if (ratio >= 0.48) return 6.0;
-    if (ratio >= 0.38) return 5.5;
-    if (ratio >= 0.28) return 5.0;
-    return 4.5;
-  };
-
-  const listeningTotal = (test.listeningQuestions || []).length;
-  const readingTotal = (test.readingQuestions || []).length;
-  const listeningBand = getBandFromScore(listeningScore, listeningTotal || 40);
-  const readingBand = getBandFromScore(readingScore, readingTotal || 40);
-  const writingBand = writingEvaluation?.overallWritingBand || 7.0;
-  const speakingBand = speakingEvaluation?.speakingBand || 7.0;
-
-  // Overall Band Score calculation (average rounded to nearest 0.5)
-  const rawOverall = (listeningBand + readingBand + writingBand + speakingBand) / 4;
-  const overallBand = Math.round(rawOverall * 2) / 2;
+  const task1Words = (writingTask1 || '').trim() ? (writingTask1 || '').trim().split(/\s+/).length : 0;
+  const task2Words = (writingTask2 || '').trim() ? (writingTask2 || '').trim().split(/\s+/).length : 0;
 
   const handlePrintTRF = () => {
     window.print();
@@ -197,20 +174,31 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
 
                 <div className="p-4 bg-gray-50 rounded border border-gray-200 text-center space-y-1">
                   <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Writing</span>
-                  <p className="text-2xl font-black font-mono text-[#214162]">
-                    {writingBand.toFixed(1)}
+                  <p className="text-lg font-black font-mono text-[#214162] pt-1">
+                    {writingBand ? `Band ${writingBand.toFixed(1)}` : 'Pending'}
                   </p>
-                  <p className="text-[11px] text-gray-500">Task 1 & Task 2</p>
+                  <p className="text-[11px] text-gray-500">
+                    {writingBand ? 'Examiner Graded' : `T1: ${task1Words}w • T2: ${task2Words}w`}
+                  </p>
                 </div>
 
                 <div className="p-4 bg-gray-50 rounded border border-gray-200 text-center space-y-1">
                   <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Speaking</span>
-                  <p className="text-2xl font-black font-mono text-[#214162]">
-                    {speakingBand.toFixed(1)}
+                  <p className="text-lg font-black font-mono text-[#214162] pt-1">
+                    {speakingBand ? `Band ${speakingBand.toFixed(1)}` : 'Live Test'}
                   </p>
-                  <p className="text-[11px] text-gray-500">Parts 1, 2, & 3</p>
+                  <p className="text-[11px] text-gray-500">Interview Session</p>
                 </div>
               </div>
+
+              {!writingBand && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start space-x-2.5">
+                  <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Writing Evaluation Note:</span> Writing is evaluated manually by the IELTS teacher or examiner and is not automatically calculated. The overall band above reflects your auto-graded sections (Listening & Reading).
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -222,8 +210,8 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
               </h3>
               <div className="space-y-3">
                 {(test.listeningQuestions || []).map((q) => {
-                  const uAns = userAnswers[q.id] || '(No Answer)';
-                  const isCorrect = checkCorrect(q, uAns);
+                  const uAns = userAnswers[q.id] || userAnswers[String(q.questionNumber)] || '';
+                  const isCorrect = checkQuestionCorrect(q, uAns);
                   const isExp = expandedExplanation === q.id;
 
                   return (
@@ -288,77 +276,243 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
           )}
 
           {/* Reading Review */}
-          {activeTab === 'reading' && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold text-gray-900">
-                Reading Section Question Answers
-              </h3>
-              <div className="space-y-3">
-                {(test.readingQuestions || []).map((q) => {
-                  const uAns = userAnswers[q.id] || '(No Answer)';
-                  const isCorrect = checkCorrect(q, uAns);
-                  const isExp = expandedExplanation === q.id;
+          {activeTab === 'reading' && (() => {
+            const passages = test.readingPassages || [];
+            const activePassage = passages[activePassageIndex] || passages[0];
+            const activeHighlights = activePassage
+              ? (highlights || []).filter(
+                  (h) =>
+                    h.passageId === activePassage.id ||
+                    h.passageId === `p${activePassage.partNumber}` ||
+                    (!h.passageId && activePassage.partNumber === 1)
+                )
+              : [];
 
-                  return (
-                    <div
-                      key={q.id}
-                      className="p-4 bg-gray-50 rounded border border-gray-200 space-y-2 text-xs"
+            const renderResultHighlightedText = (text: string) => {
+              if (!text || activeHighlights.length === 0) return text;
+              interface TextChunk {
+                text: string;
+                isHighlight: boolean;
+                id: string;
+                note: string;
+                color: string;
+              }
+              let parts: TextChunk[] = [{ text, isHighlight: false, id: '', note: '', color: '' }];
+              const sorted = [...activeHighlights].sort((a, b) => b.text.length - a.text.length);
+
+              sorted.forEach((hl) => {
+                const newParts: TextChunk[] = [];
+                parts.forEach((part) => {
+                  if (part.isHighlight) {
+                    newParts.push(part);
+                    return;
+                  }
+                  let remaining = part.text;
+                  const searchStr = hl.text.toLowerCase();
+                  while (remaining.length > 0) {
+                    const idx = remaining.toLowerCase().indexOf(searchStr);
+                    if (idx === -1) {
+                      newParts.push({ text: remaining, isHighlight: false, id: '', note: '', color: '' });
+                      break;
+                    }
+                    if (idx > 0) {
+                      newParts.push({ text: remaining.slice(0, idx), isHighlight: false, id: '', note: '', color: '' });
+                    }
+                    newParts.push({
+                      text: remaining.slice(idx, idx + hl.text.length),
+                      isHighlight: true,
+                      id: hl.id,
+                      note: hl.note || '',
+                      color: hl.color || 'yellow',
+                    });
+                    remaining = remaining.slice(idx + hl.text.length);
+                  }
+                });
+                parts = newParts.filter((p) => p.text.length > 0);
+              });
+
+              return (
+                <>
+                  {parts.map((p, i) => {
+                    if (p.isHighlight) {
+                      const markCls = getHighlightMarkClass(p.color);
+                      return (
+                        <mark
+                          key={`${p.id}-${i}`}
+                          className={`${markCls} px-0.5 rounded inline font-medium`}
+                          title={p.note ? `Note: ${p.note}` : 'Highlight'}
+                        >
+                          {p.text}
+                          {p.note && (
+                            <span className="inline-block w-2 h-2 ml-0.5 align-top bg-blue-600 rounded-full border border-white" />
+                          )}
+                        </mark>
+                      );
+                    }
+                    return <span key={i}>{p.text}</span>;
+                  })}
+                </>
+              );
+            };
+
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">
+                      Reading Section Performance ({readingScore}/{readingTotal})
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Official IELTS Band {readingBand.toFixed(1)} · {(highlights || []).length} highlights recorded
+                    </p>
+                  </div>
+
+                  <div className="flex items-center space-x-1.5 bg-gray-100 p-1 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setReadingViewMode('questions')}
+                      className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
+                        readingViewMode === 'questions' ? 'bg-[#214162] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                      }`}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start space-x-3">
-                          <span className="w-6 h-6 rounded bg-[#214162] text-white font-mono font-bold text-xs flex items-center justify-center shrink-0">
-                            {q.questionNumber}
-                          </span>
-                          <div>
-                            <p className="font-semibold text-gray-900 text-xs">
-                              {q.questionText}
-                            </p>
-                            <div className="flex items-center space-x-4 mt-1.5 font-mono">
-                              <span className="text-gray-500">
-                                Your Answer:{' '}
-                                <strong className={isCorrect ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
-                                  {uAns}
-                                </strong>
-                              </span>
-                              <span className="text-gray-500">
-                                Correct Answer: <strong className="text-gray-900">{Array.isArray(q.correctAnswer) ? q.correctAnswer.join(", ") : q.correctAnswer}</strong>
-                              </span>
-                            </div>
-                          </div>
+                      Question Answers (Q1–Q40)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReadingViewMode('passages')}
+                      className={`px-3 py-1 rounded text-xs font-semibold flex items-center space-x-1 transition-all ${
+                        readingViewMode === 'passages' ? 'bg-[#214162] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Review Passages &amp; Highlights</span>
+                    </button>
+                  </div>
+                </div>
+
+                {readingViewMode === 'passages' && (
+                  <div className="space-y-4">
+                    {/* Passage Tabs */}
+                    <div className="flex items-center space-x-2 border-b border-gray-200 pb-2">
+                      {passages.map((p, idx) => {
+                        const count = (highlights || []).filter(
+                          (h) => h.passageId === p.id || h.passageId === `p${p.partNumber}`
+                        ).length;
+                        return (
+                          <button
+                            key={p.id || idx}
+                            type="button"
+                            onClick={() => setActivePassageIndex(idx)}
+                            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              activePassageIndex === idx
+                                ? 'bg-[#214162] text-white shadow-xs'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            Passage {p.partNumber} {count > 0 && `(${count} hl)`}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {activePassage && (
+                      <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4 max-h-[500px] overflow-y-auto">
+                        <div className="border-b border-gray-200 pb-2">
+                          <h4 className="font-bold text-sm text-gray-900">{renderResultHighlightedText(activePassage.title)}</h4>
+                          {activePassage.subtitle && (
+                            <p className="text-xs text-gray-500 mt-0.5">{renderResultHighlightedText(activePassage.subtitle)}</p>
+                          )}
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                          {isCorrect ? (
-                            <span className="flex items-center space-x-1 text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> <span>Correct</span>
-                            </span>
-                          ) : (
-                            <span className="flex items-center space-x-1 text-red-700 font-bold bg-red-50 px-2.5 py-1 rounded border border-red-200">
-                              <XCircle className="w-3.5 h-3.5" /> <span>Incorrect</span>
-                            </span>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => setExpandedExplanation(isExp ? null : q.id)}
-                            className="p-1 text-gray-400 hover:text-gray-600"
-                          >
-                            {isExp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                          </button>
+                        <div className="space-y-3 text-xs leading-relaxed text-gray-800">
+                          {activePassage.paragraphs.map((p, idx) => {
+                            if (p.type === 'heading') {
+                              return <h5 key={idx} className="font-bold text-sm text-gray-900 mt-3">{renderResultHighlightedText(p.text || '')}</h5>;
+                            }
+                            if (p.type === 'table') {
+                              return (
+                                <pre key={idx} className="p-3 bg-white border border-gray-200 rounded font-mono text-xs whitespace-pre-wrap">
+                                  {renderResultHighlightedText(p.text || '')}
+                                </pre>
+                              );
+                            }
+                            return <p key={idx} className="leading-relaxed">{renderResultHighlightedText(p.text || '')}</p>;
+                          })}
                         </div>
                       </div>
+                    )}
+                  </div>
+                )}
 
-                      {isExp && (
-                        <p className="mt-2 pt-2 border-t border-gray-200 text-gray-600 italic">
-                          💡 Explanation: {q.explanation}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
+                {readingViewMode === 'questions' && (
+                  <div className="space-y-3">
+                    {(test.readingQuestions || []).map((q) => {
+                      const uAns = userAnswers[q.id] || userAnswers[String(q.questionNumber)] || '';
+                      const isCorrect = checkQuestionCorrect(q, uAns);
+                      const isExp = expandedExplanation === q.id;
+
+                      return (
+                        <div
+                          key={q.id}
+                          className="p-4 bg-gray-50 rounded border border-gray-200 space-y-2 text-xs"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start space-x-3">
+                              <span className="w-6 h-6 rounded bg-[#214162] text-white font-mono font-bold text-xs flex items-center justify-center shrink-0">
+                                {q.questionNumber}
+                              </span>
+                              <div>
+                                <p className="font-semibold text-gray-900 text-xs">
+                                  {q.questionText}
+                                </p>
+                                <div className="flex items-center space-x-4 mt-1.5 font-mono">
+                                  <span className="text-gray-500">
+                                    Your Answer:{' '}
+                                    <strong className={isCorrect ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
+                                      {uAns}
+                                    </strong>
+                                  </span>
+                                  <span className="text-gray-500">
+                                    Correct Answer: <strong className="text-gray-900">{Array.isArray(q.correctAnswer) ? q.correctAnswer.join(", ") : q.correctAnswer}</strong>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-2">
+                              {isCorrect ? (
+                                <span className="flex items-center space-x-1 text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> <span>Correct</span>
+                                </span>
+                              ) : (
+                                <span className="flex items-center space-x-1 text-red-700 font-bold bg-red-50 px-2.5 py-1 rounded border border-red-200">
+                                  <XCircle className="w-3.5 h-3.5" /> <span>Incorrect</span>
+                                </span>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => setExpandedExplanation(isExp ? null : q.id)}
+                                className="p-1 text-gray-400 hover:text-gray-600"
+                              >
+                                {isExp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {isExp && (
+                            <p className="mt-2 pt-2 border-t border-gray-200 text-gray-600 italic">
+                              💡 Explanation: {q.explanation}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Writing AI Evaluation Tab */}
           {activeTab === 'writing' && (
@@ -432,12 +586,14 @@ export const TestResultsModal: React.FC<TestResultsModalProps> = ({
                 </div>
               ) : (
                 <div className="text-center py-12 space-y-3">
-                  <Sparkles className="w-10 h-10 text-blue-600 mx-auto animate-pulse" />
+                  <div className="w-12 h-12 rounded-full bg-blue-50 text-[#214162] flex items-center justify-center mx-auto border border-blue-200">
+                    <FileText className="w-6 h-6" />
+                  </div>
                   <h4 className="text-sm font-bold text-gray-900">
-                    Writing Essays Submitted
+                    Writing Tasks Submitted for Teacher Evaluation
                   </h4>
-                  <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                    Click the "AI Band Score" button in the writing editor or summary screen to generate instant examiner grading.
+                  <p className="text-xs text-gray-600 max-w-md mx-auto leading-relaxed">
+                    Task 1 ({task1Words} words) and Task 2 ({task2Words} words) have been securely saved. Writing is evaluated directly by the IELTS instructor or examiner and does not require automatic calculation.
                   </p>
                 </div>
               )}
