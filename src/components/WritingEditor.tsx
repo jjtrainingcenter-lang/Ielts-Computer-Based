@@ -4,6 +4,7 @@ import { ExamImageViewer } from './ExamImageViewer';
 import { HighlightSelectionWrapper } from './HighlightSelectionWrapper';
 import { HighlightText } from './HighlightText';
 import { HighlightPaletteBar } from './HighlightPaletteBar';
+import { HighlightColor, getStoredHighlightColor, setStoredHighlightColor } from '../lib/highlightColors';
 
 import {
   FileText,
@@ -58,6 +59,35 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
     onSelectTask?.(num);
   };
   const [showTips, setShowTips] = useState(false);
+  const [activeHighlightColor, setActiveHighlightColor] = useState<HighlightColor>(getStoredHighlightColor);
+
+  const writingContextId = `writing_${activeTaskNum}`;
+  const writingHighlights = (highlights || []).filter(
+    (h) => h.passageId === writingContextId || h.passageId === 'writing'
+  );
+
+  const handlePaletteHighlight = (color: HighlightColor) => {
+    setActiveHighlightColor(color);
+    setStoredHighlightColor(color);
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) {
+      const text = sel.toString().trim();
+      if (text.length > 0 && onAddHighlight) {
+        const segments = text
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        segments.forEach((seg) => {
+          onAddHighlight({
+            passageId: writingContextId,
+            text: seg,
+            color,
+          });
+        });
+        sel.removeAllRanges();
+      }
+    }
+  };
 
   // Fallback if tasks are empty or undefined
   const defaultTasks: WritingTaskData[] = [
@@ -188,7 +218,12 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
         </div>
 
         {/* Task Title & Question Prompt */}
-        <div className="space-y-3">
+        <HighlightSelectionWrapper
+          contextId={writingContextId}
+          onAddHighlight={onAddHighlight || (() => {})}
+          defaultColor={activeHighlightColor}
+          className="space-y-3 select-text"
+        >
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold uppercase tracking-wider bg-blue-50 text-[#214162] border border-blue-200">
               <BookOpen className="w-3.5 h-3.5 text-[#214162]" />
@@ -206,13 +241,19 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
             </button>
           </div>
 
-          <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
-            {currentTask.title}
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug select-text">
+            <HighlightText
+              text={currentTask.title}
+              contextId={writingContextId}
+              highlights={highlights}
+              onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+              onUpdateHighlight={onUpdateHighlight}
+            />
           </h2>
 
           {/* Examiner Criteria Accordion */}
           {showTips && (
-            <div className="p-4 bg-blue-50/60 rounded-lg border border-blue-200 text-xs text-blue-950 space-y-2">
+            <div className="p-4 bg-blue-50/60 rounded-lg border border-blue-200 text-xs text-blue-950 space-y-2 select-text">
               <h4 className="font-bold text-[#214162] flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5" />
                 <span>IELTS Official Band Criteria ({activeTaskNum === 1 ? 'Task 1' : 'Task 2'}):</span>
@@ -239,27 +280,23 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Task Prompt
             </span>
-            <HighlightPaletteBar compact />
+            <HighlightPaletteBar
+              compact
+              activeColor={activeHighlightColor}
+              onChangeColor={handlePaletteHighlight}
+              highlightCount={writingHighlights.length}
+            />
           </div>
 
           {/* Prompt Box */}
-          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm leading-relaxed text-slate-800 whitespace-pre-line shadow-2xs font-sans">
-            {onAddHighlight ? (
-              <HighlightSelectionWrapper
-                contextId={`writing_${activeTaskNum}`}
-                onAddHighlight={onAddHighlight}
-              >
-                <HighlightText
-                  text={currentTask.prompt}
-                  contextId={`writing_${activeTaskNum}`}
-                  highlights={highlights}
-                  onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
-                  onUpdateHighlight={onUpdateHighlight}
-                />
-              </HighlightSelectionWrapper>
-            ) : (
-              currentTask.prompt
-            )}
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm leading-relaxed text-slate-800 whitespace-pre-line shadow-2xs font-sans select-text">
+            <HighlightText
+              text={currentTask.prompt}
+              contextId={writingContextId}
+              highlights={highlights}
+              onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+              onUpdateHighlight={onUpdateHighlight}
+            />
           </div>
 
           {/* Optional Task Image (Map, Graph, Diagram) */}
@@ -270,7 +307,17 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
                 imageAlt={currentTask.media.alt || `Visual Reference for Task ${activeTaskNum}`} 
                 imageZoomable={currentTask.imageZoomable !== false} 
               />
-              {currentTask.media.caption && <p className="text-left text-xs text-slate-500 mt-2 italic">{currentTask.media.caption}</p>}
+              {currentTask.media.caption && (
+                <p className="text-left text-xs text-slate-500 mt-2 italic select-text">
+                  <HighlightText
+                    text={currentTask.media.caption}
+                    contextId={writingContextId}
+                    highlights={highlights}
+                    onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                    onUpdateHighlight={onUpdateHighlight}
+                  />
+                </p>
+              )}
             </div>
           )}
 
@@ -283,7 +330,7 @@ export const WritingEditor: React.FC<WritingEditorProps> = ({
               />
             </div>
           )}
-        </div>
+        </HighlightSelectionWrapper>
 
         {/* Bar Chart Visualization for Task 1 (if available) */}
         {activeTaskNum === 1 && currentTask.chartData && (

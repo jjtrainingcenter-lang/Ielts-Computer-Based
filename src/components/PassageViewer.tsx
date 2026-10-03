@@ -42,6 +42,8 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
   const handleMouseUp = () => {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) {
+      setSelectedText('');
+      setPopoverPos(null);
       return;
     }
     const text = selection.toString().trim();
@@ -49,9 +51,14 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
       try {
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
-        setSelectedText(text);
-        setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+        if (rect.width > 0 || rect.height > 0) {
+          setSelectedText(text);
+          setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+        }
       } catch (e) {}
+    } else {
+      setSelectedText('');
+      setPopoverPos(null);
     }
   };
 
@@ -233,7 +240,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
             Reading Passage {currentPassage.partNumber}
           </p>
           {currentPassage.subtitle && (
-            <p className="text-xs text-slate-500 mt-0.5">{currentPassage.subtitle}</p>
+            <p className="text-xs text-slate-500 mt-0.5 select-text">{renderHighlightedText(currentPassage.subtitle)}</p>
           )}
         </div>
 

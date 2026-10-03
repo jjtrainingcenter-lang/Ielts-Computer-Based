@@ -383,9 +383,7 @@ export default function App() {
   const handleSectionTimeExpired = () => {
     setIsTimerRunning(false);
     setSectionDeadline(null);
-    if (activeSection === 'reading') {
-      saveSectionProgress('reading');
-    }
+    saveSectionProgress(activeSection);
     const order: TestSection[] = ['listening', 'reading', 'writing'];
     const currentIdx = order.indexOf(activeSection);
     if (currentIdx < order.length - 1) {
@@ -508,7 +506,7 @@ export default function App() {
   const handleAddHighlight = (item: Omit<HighlightItem, 'id' | 'createdAt'>) => {
     const newItem: HighlightItem = {
       ...item,
-      id: `hl-${Date.now()}`,
+      id: `hl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       createdAt: new Date().toISOString(),
     };
     setHighlights((prev) => [...prev, newItem]);
@@ -968,9 +966,7 @@ export default function App() {
             onClick={() => {
               if (window.confirm("Are you sure you want to finish this section early? You cannot return to it later.")) {
                 setIsTimerRunning(false);
-                if (activeSection === 'reading') {
-                  saveSectionProgress('reading');
-                }
+                saveSectionProgress(activeSection);
                 const order: TestSection[] = ['listening', 'reading', 'writing'];
                 const currentIdx = order.indexOf(activeSection);
                 if (currentIdx < order.length - 1) {
@@ -1015,6 +1011,7 @@ export default function App() {
                 onAddHighlight={handleAddHighlight}
                 onRemoveHighlight={handleRemoveHighlight}
                 onUpdateHighlight={handleUpdateHighlight}
+                section="reading"
               />
             }
           />
@@ -1057,6 +1054,7 @@ export default function App() {
                   onAddHighlight={handleAddHighlight}
                   onRemoveHighlight={handleRemoveHighlight}
                   onUpdateHighlight={handleUpdateHighlight}
+                  section="listening"
                 />
               </div>
             </div>

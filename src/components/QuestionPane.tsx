@@ -18,6 +18,7 @@ interface QuestionPaneProps {
   onAddHighlight?: (highlight: Omit<HighlightItem, 'id' | 'createdAt'>) => void;
   onRemoveHighlight?: (id: string) => void;
   onUpdateHighlight?: (id: string, updates: Partial<HighlightItem>) => void;
+  section?: 'listening' | 'reading' | 'writing' | 'speaking';
 }
 
 const SINGLE_CHOICE_TYPES = new Set([
@@ -69,12 +70,13 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
   onAddHighlight,
   onRemoveHighlight,
   onUpdateHighlight,
+  section,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const currentQuestion = questions?.[currentQuestionIndex];
-  const isReadingSet = currentQuestion?.section === 'reading';
+  const isReadingSet = section ? section === 'reading' : (currentQuestion?.section === 'reading' || !!currentQuestion?.passageId);
 
   // IELTS Reading is presented passage-by-passage. When the candidate is on a
   // question from Passage 1, only that passage's questions are shown beside it;
@@ -153,15 +155,26 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
     if (sel && !sel.isCollapsed) {
       const text = sel.toString().trim();
       if (text.length > 0 && onAddHighlight) {
-        onAddHighlight({
-          passageId: questionsContextId,
-          text,
-          color,
+        const segments = text
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        segments.forEach((seg) => {
+          onAddHighlight({
+            passageId: questionsContextId,
+            text: seg,
+            color,
+          });
         });
         sel.removeAllRanges();
       }
     }
   };
+
+  const currentContextHighlights = (highlights || []).filter((h) => {
+    if (isReadingSet) return h.passageId === 'reading_questions' || h.passageId === 'questions';
+    return h.passageId === 'listening_questions';
+  });
 
   const firstVisibleQuestion = displayedQuestions[0]?.questionNumber;
   const lastVisibleQuestion = displayedQuestions[displayedQuestions.length - 1]?.questionNumber;
@@ -180,7 +193,11 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
               </p>
             </div>
             <div className="flex items-center space-x-3">
-              <HighlightPaletteBar compact onChangeColor={handlePaletteHighlight} />
+              <HighlightPaletteBar
+                compact
+                onChangeColor={handlePaletteHighlight}
+                highlightCount={currentContextHighlights.length}
+              />
               <span className="text-[11px] font-semibold text-slate-500 bg-white border border-slate-200 rounded px-2.5 py-1">
                 Questions {firstVisibleQuestion}–{lastVisibleQuestion}
               </span>
@@ -199,7 +216,11 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
               · Question {currentQuestion.questionNumber} of {questions.length}
             </span>
           </div>
-          <HighlightPaletteBar compact onChangeColor={handlePaletteHighlight} />
+          <HighlightPaletteBar
+            compact
+            onChangeColor={handlePaletteHighlight}
+            highlightCount={currentContextHighlights.length}
+          />
         </div>
       )}
 

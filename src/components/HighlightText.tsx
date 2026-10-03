@@ -26,12 +26,18 @@ export const HighlightText: React.FC<HighlightTextProps> = ({
   // Match highlights for this context
   const passageHighlights = (highlights || [])
     .filter((h) => {
+      if (!h || !h.text) return false;
       if (h.passageId === contextId) return true;
+      // Reading questions: allow matching legacy 'questions'
       if (
-        (contextId === 'questions' || contextId === 'reading_questions' || contextId === 'listening_questions') &&
-        (h.passageId === 'questions' || h.passageId === 'reading_questions' || h.passageId === 'listening_questions')
+        (contextId === 'reading_questions' && h.passageId === 'questions') ||
+        (contextId === 'questions' && h.passageId === 'reading_questions')
       ) {
         return true;
+      }
+      // Writing contexts: allow matching writing_1, writing_2, or writing
+      if (contextId.startsWith('writing') && h.passageId && h.passageId.startsWith('writing')) {
+        return h.passageId === contextId || h.passageId === 'writing';
       }
       return false;
     })
