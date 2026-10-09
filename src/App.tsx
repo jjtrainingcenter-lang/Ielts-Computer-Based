@@ -1123,6 +1123,8 @@ export default function App() {
                 <ListeningPlayer
                   partData={audioDataForPlayer}
                   masterVolume={settings.volume}
+                  testId={currentTest.id}
+                  candidateId={candidateId}
                 />
               )}
               <div className="flex-1 overflow-hidden">

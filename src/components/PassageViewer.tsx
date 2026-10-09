@@ -233,13 +233,14 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
   ) => {
     if (!text) return null;
     const paraHighlights = passageHighlights.filter((h) => {
-      if (paragraphId && h.paragraphId) {
+      if (h.paragraphId) {
         return h.paragraphId === paragraphId;
       }
-      if (paragraphIndex !== undefined && h.paragraphIndex !== undefined) {
+      if (h.paragraphIndex !== undefined) {
         return h.paragraphIndex === paragraphIndex;
       }
-      return true;
+      // If highlight didn't capture a paragraph context, only allow matching if this element also lacks paragraph context
+      return !paragraphId && paragraphIndex === undefined;
     });
 
     if (paraHighlights.length === 0) return text;

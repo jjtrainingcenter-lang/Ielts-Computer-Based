@@ -1,23 +1,31 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ListeningSectionData } from '../types';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Play } from 'lucide-react';
 import { getGoogleDrivePreviewUrl, getMediaUrlCandidates, isGoogleDriveUrl } from '../lib/mediaUrls';
 
 interface ListeningPlayerProps {
   partData: ListeningSectionData;
   masterVolume: number;
+  testId?: string;
+  candidateId?: string;
 }
 
 /**
- * Candidate Listening playback intentionally has no visible player controls.
- * The recording runs once in the background at 1x speed and candidates cannot
- * pause, seek, rewind, fast-forward, or change playback speed.
+ * Candidate Listening playback runs in the background at 1x speed without
+ * visible scrub controls. Audio state and playback position are persisted so
+ * that reloading or unexpected browser exit resumes from the exact second it left off.
  */
-export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, masterVolume }) => {
+export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({
+  partData,
+  masterVolume,
+  testId,
+  candidateId,
+}) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastAllowedTimeRef = useRef(0);
   const restoringSeekRef = useRef(false);
   const completedRef = useRef(false);
+  const hasRestoredPositionRef = useRef(false);
 
   const [candidateIndex, setCandidateIndex] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
@@ -39,20 +47,78 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
   const hasDriveSource = isGoogleDriveUrl(partData.audioUrl);
   const noAudioConfigured = !partData.audioUrl?.trim();
 
+  // Distinct persistence key based on candidate, test, and audio
+  const storageKey = useMemo(() => {
+    const tid = testId || 'default';
+    const cid = candidateId || 'candidate';
+    const audioKey = partData.audioUrl ? partData.audioUrl.trim() : `part_${partData.partNumber || 1}`;
+    return `jj_cbt_audio_pos_${cid}_${tid}_${audioKey}`;
+  }, [candidateId, testId, partData.audioUrl, partData.partNumber]);
+
+  const getSavedPlaybackInfo = (): { currentTime: number; isCompleted: boolean } => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          currentTime: typeof parsed.currentTime === 'number' && parsed.currentTime > 0 ? parsed.currentTime : 0,
+          isCompleted: !!parsed.isCompleted,
+        };
+      }
+    } catch (e) {
+      try {
+        const val = parseFloat(localStorage.getItem(storageKey) || '0');
+        if (!isNaN(val) && val > 0) return { currentTime: val, isCompleted: false };
+      } catch (err) {}
+    }
+    return { currentTime: 0, isCompleted: false };
+  };
+
+  const applySavedPosition = () => {
+    const audio = audioRef.current;
+    if (!audio || hasRestoredPositionRef.current) return;
+
+    const { currentTime, isCompleted } = getSavedPlaybackInfo();
+    if (isCompleted) {
+      completedRef.current = true;
+      return;
+    }
+
+    if (currentTime > 0) {
+      hasRestoredPositionRef.current = true;
+      restoringSeekRef.current = true;
+      const targetTime =
+        audio.duration && !isNaN(audio.duration) && audio.duration > 0
+          ? Math.min(currentTime, Math.max(0, audio.duration - 0.5))
+          : currentTime;
+
+      try {
+        audio.currentTime = targetTime;
+        lastAllowedTimeRef.current = targetTime;
+      } catch (err) {
+        console.warn('Could not seek audio immediately:', err);
+      }
+
+      window.setTimeout(() => {
+        restoringSeekRef.current = false;
+      }, 250);
+    }
+  };
+
   const attemptPlay = async () => {
     const audio = audioRef.current;
     if (!audio || completedRef.current || !resolvedAudioUrl || useDriveFallback) return;
 
     try {
+      applySavedPosition();
       audio.playbackRate = 1;
       audio.volume = Math.max(0, Math.min(1, masterVolume));
       await audio.play();
       setIsBlocked(false);
       setAudioError(false);
     } catch (error) {
-      // Browsers can block autoplay until the next user gesture. We keep the
-      // player hidden and automatically retry on the candidate's next click/key.
-      console.warn('Listening autoplay is waiting for browser permission:', error);
+      // Browsers can block autoplay on initial reload until the next user gesture.
+      console.warn('Listening playback is waiting for browser gesture:', error);
       setIsBlocked(true);
     }
   };
@@ -61,11 +127,12 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
     completedRef.current = false;
     lastAllowedTimeRef.current = 0;
     restoringSeekRef.current = false;
+    hasRestoredPositionRef.current = false;
     setCandidateIndex(0);
     setIsBlocked(false);
     setAudioError(false);
     setUseDriveFallback(false);
-  }, [partData.audioUrl]);
+  }, [partData.audioUrl, storageKey]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -85,8 +152,35 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
     }
   }, [masterVolume]);
 
-  // If autoplay was blocked, any normal interaction with the exam immediately
-  // resumes the hidden recording. This is not a player control exposed to the student.
+  // Persist position on beforeunload and pagehide
+  useEffect(() => {
+    const saveCurrent = () => {
+      const audio = audioRef.current;
+      if (audio && audio.currentTime > 0 && !completedRef.current) {
+        try {
+          localStorage.setItem(
+            storageKey,
+            JSON.stringify({
+              currentTime: audio.currentTime,
+              duration: audio.duration || 0,
+              isCompleted: false,
+              timestamp: Date.now(),
+            })
+          );
+        } catch (e) {}
+      }
+    };
+
+    window.addEventListener('beforeunload', saveCurrent);
+    window.addEventListener('pagehide', saveCurrent);
+    return () => {
+      saveCurrent();
+      window.removeEventListener('beforeunload', saveCurrent);
+      window.removeEventListener('pagehide', saveCurrent);
+    };
+  }, [storageKey]);
+
+  // If autoplay was blocked by the browser on reload, any normal interaction with the exam immediately resumes
   useEffect(() => {
     if (noAudioConfigured || useDriveFallback || completedRef.current) return;
 
@@ -114,7 +208,6 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
   }, [isBlocked, resolvedAudioUrl, useDriveFallback, noAudioConfigured]);
 
   useEffect(() => () => {
-    // Stop the recording only when the Listening player genuinely leaves the page.
     if (audioRef.current) audioRef.current.pause();
   }, []);
 
@@ -123,25 +216,45 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
     if (!audio) return;
     audio.playbackRate = 1;
     audio.volume = Math.max(0, Math.min(1, masterVolume));
+    applySavedPosition();
     void attemptPlay();
+  };
+
+  const handleCanPlay = () => {
+    applySavedPosition();
   };
 
   const handleTimeUpdate = () => {
     const audio = audioRef.current;
     if (!audio || restoringSeekRef.current) return;
     lastAllowedTimeRef.current = audio.currentTime;
+
+    // Save audio playback position so reload/sudden close resumes right here
+    if (audio.currentTime > 0 && !completedRef.current) {
+      try {
+        localStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            currentTime: audio.currentTime,
+            duration: audio.duration || 0,
+            isCompleted: false,
+            timestamp: Date.now(),
+          })
+        );
+      } catch (e) {}
+    }
   };
 
   const handleSeeking = () => {
     const audio = audioRef.current;
     if (!audio || restoringSeekRef.current) return;
     const allowed = lastAllowedTimeRef.current;
-    if (Math.abs(audio.currentTime - allowed) > 0.25) {
+    if (Math.abs(audio.currentTime - allowed) > 0.3) {
       restoringSeekRef.current = true;
       audio.currentTime = allowed;
       window.setTimeout(() => {
         restoringSeekRef.current = false;
-      }, 0);
+      }, 50);
     }
   };
 
@@ -152,8 +265,6 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
   };
 
   const handlePause = () => {
-    // Ignore the natural pause after the recording has finished. Any other pause
-    // (media key, browser UI, script, etc.) is immediately reversed.
     if (completedRef.current || useDriveFallback) return;
     window.setTimeout(() => {
       void attemptPlay();
@@ -163,6 +274,17 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
   const handleEnded = () => {
     completedRef.current = true;
     setIsBlocked(false);
+    try {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          currentTime: audioRef.current?.duration || 0,
+          duration: audioRef.current?.duration || 0,
+          isCompleted: true,
+          timestamp: Date.now(),
+        })
+      );
+    } catch (e) {}
   };
 
   const handleError = () => {
@@ -173,9 +295,6 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
       return;
     }
 
-    // Google Drive can refuse direct media streaming for some large files. In
-    // that case keep its preview iframe completely hidden and request autoplay.
-    // Students still receive no player controls to pause or seek.
     if (hasDriveSource && driveAutoplayUrl) {
       setUseDriveFallback(true);
       setAudioError(false);
@@ -207,6 +326,7 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
           controls={false}
           controlsList="nodownload noplaybackrate noremoteplayback"
           onLoadedMetadata={handleLoadedMetadata}
+          onCanPlay={handleCanPlay}
           onTimeUpdate={handleTimeUpdate}
           onSeeking={handleSeeking}
           onRateChange={handleRateChange}
@@ -230,8 +350,19 @@ export const ListeningPlayer: React.FC<ListeningPlayerProps> = ({ partData, mast
       )}
 
       {isBlocked && !useDriveFallback && (
-        <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs font-semibold">
-          Audio is ready. Click anywhere in the exam once to allow browser playback; it will then continue in the background without player controls.
+        <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs font-semibold flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>Audio paused from where you left off. Click anywhere in the exam or press Resume to continue.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void attemptPlay()}
+            className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#214162] hover:bg-[#1a334e] text-white rounded text-xs font-bold shrink-0 transition-colors cursor-pointer shadow-xs"
+          >
+            <Play className="w-3 h-3 fill-current" />
+            <span>Resume Audio</span>
+          </button>
         </div>
       )}
 

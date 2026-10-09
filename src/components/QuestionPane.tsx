@@ -292,18 +292,53 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
       const text = sel.toString().trim();
       if (text.length > 0 && onAddHighlight) {
         let detectedContext = questionsContextId;
+        let startOffset: number | undefined;
+        let endOffset: number | undefined;
+        let prefix: string | undefined;
+        let suffix: string | undefined;
+
         try {
           const range = sel.getRangeAt(0);
           const startNode = range.startContainer;
-          const element = startNode.nodeType === Node.ELEMENT_NODE ? (startNode as HTMLElement) : startNode.parentElement;
-          const contextEl = element?.closest('[data-highlight-context]');
+          const element =
+            startNode.nodeType === Node.ELEMENT_NODE
+              ? (startNode as HTMLElement)
+              : startNode.parentElement;
+          const contextEl = (element?.closest('[data-highlight-context]') as HTMLElement | null) || null;
           if (contextEl) {
             detectedContext = contextEl.getAttribute('data-highlight-context') || questionsContextId;
+            let charOffset = 0;
+            let found = false;
+            const walker = document.createTreeWalker(contextEl, NodeFilter.SHOW_TEXT);
+            while (walker.nextNode()) {
+              const textNode = walker.currentNode;
+              if (textNode === range.startContainer) {
+                charOffset += range.startOffset;
+                found = true;
+                break;
+              }
+              charOffset += textNode.textContent?.length || 0;
+            }
+            if (found) {
+              startOffset = charOffset;
+              endOffset = charOffset + text.length;
+              const fullText = contextEl.textContent || '';
+              prefix = fullText.slice(Math.max(0, charOffset - 30), charOffset);
+              suffix = fullText.slice(
+                charOffset + text.length,
+                Math.min(fullText.length, charOffset + text.length + 30)
+              );
+            }
           }
         } catch {}
+
         onAddHighlight({
           passageId: detectedContext,
           text,
+          startOffset,
+          endOffset,
+          prefix,
+          suffix,
           color,
         });
         sel.removeAllRanges();
