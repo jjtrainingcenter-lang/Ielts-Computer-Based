@@ -45,49 +45,141 @@ export const HighlightText: React.FC<HighlightTextProps> = ({
 
   if (passageHighlights.length === 0) return <>{text}</>;
 
-  interface TextChunk {
-    text: string;
-    isHighlight: boolean;
+  interface Interval {
+    start: number;
+    end: number;
     id: string;
-    note: string;
     color: string;
+    note?: string;
+    text: string;
   }
 
-  let parts: TextChunk[] = [{ text, isHighlight: false, id: '', note: '', color: '' }];
+  const intervals: Interval[] = [];
+  const claimed = new Uint8Array(text.length);
 
-  passageHighlights.forEach((highlight) => {
-    const newParts: TextChunk[] = [];
-    parts.forEach((part) => {
-      if (part.isHighlight) {
-        newParts.push(part);
-        return;
+  for (const h of passageHighlights) {
+    const targetText = h.text;
+    const targetLen = targetText.length;
+    if (targetLen === 0) continue;
+
+    let matchedStart = -1;
+
+    // 1. Try exact startOffset if saved
+    if (
+      typeof h.startOffset === 'number' &&
+      h.startOffset >= 0 &&
+      h.startOffset + targetLen <= text.length
+    ) {
+      const slice = text.slice(h.startOffset, h.startOffset + targetLen);
+      if (slice.toLowerCase() === targetText.toLowerCase()) {
+        let conflict = false;
+        for (let k = h.startOffset; k < h.startOffset + targetLen; k++) {
+          if (claimed[k]) {
+            conflict = true;
+            break;
+          }
+        }
+        if (!conflict) {
+          matchedStart = h.startOffset;
+        }
       }
+    }
 
-      let remainingText = part.text;
-      const searchStr = highlight.text.toLowerCase();
+    // 2. Disambiguate with prefix / suffix
+    if (matchedStart === -1 && (h.prefix || h.suffix)) {
+      let pos = 0;
+      let bestScore = 0;
+      let bestPos = -1;
+      while (pos < text.length) {
+        const idx = text.toLowerCase().indexOf(targetText.toLowerCase(), pos);
+        if (idx === -1) break;
+        let score = 0;
+        if (h.prefix) {
+          const actualPre = text.slice(Math.max(0, idx - h.prefix.length), idx);
+          if (actualPre.toLowerCase() === h.prefix.toLowerCase()) score += 2;
+        }
+        if (h.suffix) {
+          const actualSuf = text.slice(idx + targetLen, idx + targetLen + h.suffix.length);
+          if (actualSuf.toLowerCase() === h.suffix.toLowerCase()) score += 2;
+        }
+        if (score > bestScore) {
+          let conflict = false;
+          for (let k = idx; k < idx + targetLen; k++) {
+            if (claimed[k]) {
+              conflict = true;
+              break;
+            }
+          }
+          if (!conflict) {
+            bestScore = score;
+            bestPos = idx;
+          }
+        }
+        pos = idx + 1;
+      }
+      if (bestPos !== -1) {
+        matchedStart = bestPos;
+      }
+    }
 
-      while (remainingText.length > 0) {
-        const index = remainingText.toLowerCase().indexOf(searchStr);
-        if (index === -1) {
-          newParts.push({ text: remainingText, isHighlight: false, id: '', note: '', color: '' });
+    // 3. Fallback: match first unclaimed occurrence (never highlight all occurrences!)
+    if (matchedStart === -1) {
+      let pos = 0;
+      while (pos < text.length) {
+        const idx = text.toLowerCase().indexOf(targetText.toLowerCase(), pos);
+        if (idx === -1) break;
+        let conflict = false;
+        for (let k = idx; k < idx + targetLen; k++) {
+          if (claimed[k]) {
+            conflict = true;
+            break;
+          }
+        }
+        if (!conflict) {
+          matchedStart = idx;
           break;
         }
-
-        if (index > 0) {
-          newParts.push({ text: remainingText.slice(0, index), isHighlight: false, id: '', note: '', color: '' });
-        }
-        newParts.push({
-          text: remainingText.slice(index, index + highlight.text.length),
-          isHighlight: true,
-          id: highlight.id,
-          note: highlight.note || '',
-          color: highlight.color || 'yellow',
-        });
-        remainingText = remainingText.slice(index + highlight.text.length);
+        pos = idx + 1;
       }
+    }
+
+    if (matchedStart !== -1) {
+      for (let k = matchedStart; k < matchedStart + targetLen; k++) {
+        claimed[k] = 1;
+      }
+      intervals.push({
+        start: matchedStart,
+        end: matchedStart + targetLen,
+        id: h.id,
+        color: h.color || 'yellow',
+        note: h.note,
+        text: text.slice(matchedStart, matchedStart + targetLen),
+      });
+    }
+  }
+
+  if (intervals.length === 0) return <>{text}</>;
+
+  intervals.sort((a, b) => a.start - b.start);
+
+  const parts: { text: string; isHighlight: boolean; id?: string; color?: string; note?: string }[] = [];
+  let cursor = 0;
+  for (const item of intervals) {
+    if (item.start > cursor) {
+      parts.push({ text: text.slice(cursor, item.start), isHighlight: false });
+    }
+    parts.push({
+      text: item.text,
+      isHighlight: true,
+      id: item.id,
+      color: item.color,
+      note: item.note,
     });
-    parts = newParts.filter((p) => p.text.length > 0);
-  });
+    cursor = item.end;
+  }
+  if (cursor < text.length) {
+    parts.push({ text: text.slice(cursor), isHighlight: false });
+  }
 
   const activeHighlight = activeHighlightId
     ? passageHighlights.find((h) => h.id === activeHighlightId)

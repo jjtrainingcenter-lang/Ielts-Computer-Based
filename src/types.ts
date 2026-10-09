@@ -225,6 +225,11 @@ export interface HighlightItem {
   passageId: string;
   text: string;
   paragraphId?: string;
+  paragraphIndex?: number;
+  startOffset?: number;
+  endOffset?: number;
+  prefix?: string;
+  suffix?: string;
   color: HighlightColor | string;
   note?: string;
   createdAt: string;

@@ -39,10 +39,81 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
   const [actionPos, setActionPos] = useState<{ x: number; y: number } | null>(null);
 
+  interface SelectionDetails {
+    text: string;
+    paragraphId?: string;
+    paragraphIndex?: number;
+    startOffset?: number;
+    endOffset?: number;
+    prefix?: string;
+    suffix?: string;
+  }
+  const [selectionDetails, setSelectionDetails] = useState<SelectionDetails | null>(null);
+
+  const captureSelectionDetails = (): SelectionDetails | null => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return null;
+    const text = selection.toString().trim();
+    if (!text) return null;
+
+    try {
+      const range = selection.getRangeAt(0);
+      let el: Node | null = range.startContainer;
+      let paraEl: HTMLElement | null = null;
+      while (el && el !== passageRef.current && el !== document.body) {
+        if (el instanceof HTMLElement && el.hasAttribute('data-paragraph-id')) {
+          paraEl = el;
+          break;
+        }
+        el = el.parentNode;
+      }
+
+      if (paraEl) {
+        const pId = paraEl.getAttribute('data-paragraph-id') || undefined;
+        const pIdxAttr = paraEl.getAttribute('data-paragraph-index');
+        const pIdx = pIdxAttr !== null && pIdxAttr !== undefined ? parseInt(pIdxAttr, 10) : undefined;
+
+        let charOffset = 0;
+        let found = false;
+        const walker = document.createTreeWalker(paraEl, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          const textNode = walker.currentNode;
+          if (textNode === range.startContainer) {
+            charOffset += range.startOffset;
+            found = true;
+            break;
+          }
+          charOffset += textNode.textContent?.length || 0;
+        }
+
+        const fullParaText = paraEl.textContent || '';
+        const prefix = fullParaText.slice(Math.max(0, charOffset - 30), charOffset);
+        const suffix = fullParaText.slice(
+          charOffset + text.length,
+          Math.min(fullParaText.length, charOffset + text.length + 30)
+        );
+
+        return {
+          text,
+          paragraphId: pId,
+          paragraphIndex: Number.isNaN(pIdx) ? undefined : pIdx,
+          startOffset: found ? charOffset : undefined,
+          endOffset: found ? charOffset + text.length : undefined,
+          prefix,
+          suffix,
+        };
+      }
+      return { text };
+    } catch {
+      return { text };
+    }
+  };
+
   const handleMouseUp = () => {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) {
       setSelectedText('');
+      setSelectionDetails(null);
       setPopoverPos(null);
       return;
     }
@@ -52,12 +123,15 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
         if (rect.width > 0 || rect.height > 0) {
+          const details = captureSelectionDetails();
           setSelectedText(text);
+          setSelectionDetails(details);
           setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
         }
       } catch (e) {}
     } else {
       setSelectedText('');
+      setSelectionDetails(null);
       setPopoverPos(null);
     }
   };
@@ -68,7 +142,9 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
       const text = selection.toString().trim();
       if (text.length > 0) {
         e.preventDefault();
+        const details = captureSelectionDetails();
         setSelectedText(text);
+        setSelectionDetails(details);
         setPopoverPos({ x: e.clientX, y: e.clientY - 10 });
       }
     }
@@ -79,44 +155,44 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
     if (!targetText) return;
     const resolvedColor = color || activeHighlightColor;
 
-    // Support single and multi-line selections seamlessly
-    const segments = targetText
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    segments.forEach((seg) => {
-      onAddHighlight({
-        passageId: currentPassage.id,
-        text: seg,
-        color: resolvedColor,
-      });
+    onAddHighlight({
+      passageId: currentPassage.id,
+      text: targetText,
+      paragraphId: selectionDetails?.paragraphId,
+      paragraphIndex: selectionDetails?.paragraphIndex,
+      startOffset: selectionDetails?.startOffset,
+      endOffset: selectionDetails?.endOffset,
+      prefix: selectionDetails?.prefix,
+      suffix: selectionDetails?.suffix,
+      color: resolvedColor,
     });
 
     setSelectedText('');
+    setSelectionDetails(null);
     setPopoverPos(null);
     window.getSelection()?.removeAllRanges();
   };
 
   const handleAddNote = (noteContent: string, color?: HighlightColor) => {
-    if (!selectedText) return;
+    const targetText = (selectedText || '').trim();
+    if (!targetText) return;
     const resolvedColor = color || activeHighlightColor;
-    
-    const segments = selectedText
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
 
-    segments.forEach((seg, idx) => {
-      onAddHighlight({
-        passageId: currentPassage.id,
-        text: seg,
-        color: resolvedColor,
-        note: idx === 0 ? (noteContent || 'Passage note') : undefined,
-      });
+    onAddHighlight({
+      passageId: currentPassage.id,
+      text: targetText,
+      paragraphId: selectionDetails?.paragraphId,
+      paragraphIndex: selectionDetails?.paragraphIndex,
+      startOffset: selectionDetails?.startOffset,
+      endOffset: selectionDetails?.endOffset,
+      prefix: selectionDetails?.prefix,
+      suffix: selectionDetails?.suffix,
+      color: resolvedColor,
+      note: noteContent || 'Passage note',
     });
 
     setSelectedText('');
+    setSelectionDetails(null);
     setPopoverPos(null);
     window.getSelection()?.removeAllRanges();
   };
@@ -124,7 +200,6 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
   const handlePaletteColorChange = (col: HighlightColor) => {
     setActiveHighlightColor(col);
     setStoredHighlightColor(col);
-    // If text is currently selected, highlight it immediately with the chosen color!
     const selection = window.getSelection();
     const currentSelText = selection ? selection.toString().trim() : '';
     if (currentSelText.length > 0) {
@@ -149,58 +224,170 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
     ? passageHighlights.find((h) => h.id === activeHighlightId)
     : null;
 
-  const renderHighlightedText = (text: string) => {
+  const renderHighlightedText = (
+    text: string,
+    paragraphId?: string,
+    paragraphIndex?: number
+  ) => {
     if (!text) return null;
     if (passageHighlights.length === 0) return text;
 
-    interface TextChunk {
-      text: string;
-      isHighlight: boolean;
+    // Filter highlights that belong to this specific paragraph/element
+    const relevant = passageHighlights.filter((h) => {
+      if (!h || !h.text) return false;
+      if (h.paragraphId) {
+        return h.paragraphId === paragraphId;
+      }
+      if (typeof h.paragraphIndex === 'number' && typeof paragraphIndex === 'number') {
+        return h.paragraphIndex === paragraphIndex;
+      }
+      // Fallback for legacy items without paragraphId:
+      // only consider if text actually contains it
+      return text.toLowerCase().includes(h.text.toLowerCase());
+    });
+
+    if (relevant.length === 0) return text;
+
+    interface Interval {
+      start: number;
+      end: number;
       id: string;
-      note: string;
       color: string;
+      note?: string;
+      text: string;
     }
 
-    let parts: TextChunk[] = [{ text, isHighlight: false, id: '', note: '', color: '' }];
+    const intervals: Interval[] = [];
+    const claimed = new Uint8Array(text.length);
 
-    passageHighlights.forEach((highlight) => {
-      const newParts: TextChunk[] = [];
-      parts.forEach((part) => {
-        if (part.isHighlight) {
-          newParts.push(part);
-          return;
+    for (const h of relevant) {
+      const targetText = h.text;
+      const targetLen = targetText.length;
+      if (targetLen === 0) continue;
+
+      let matchedStart = -1;
+
+      // 1. Try exact startOffset if saved
+      if (
+        typeof h.startOffset === 'number' &&
+        h.startOffset >= 0 &&
+        h.startOffset + targetLen <= text.length
+      ) {
+        const slice = text.slice(h.startOffset, h.startOffset + targetLen);
+        if (slice.toLowerCase() === targetText.toLowerCase()) {
+          let conflict = false;
+          for (let k = h.startOffset; k < h.startOffset + targetLen; k++) {
+            if (claimed[k]) {
+              conflict = true;
+              break;
+            }
+          }
+          if (!conflict) {
+            matchedStart = h.startOffset;
+          }
         }
+      }
 
-        let remainingText = part.text;
-        const searchStr = highlight.text.toLowerCase();
+      // 2. Disambiguate with prefix / suffix
+      if (matchedStart === -1 && (h.prefix || h.suffix)) {
+        let pos = 0;
+        let bestScore = 0;
+        let bestPos = -1;
+        while (pos < text.length) {
+          const idx = text.toLowerCase().indexOf(targetText.toLowerCase(), pos);
+          if (idx === -1) break;
+          let score = 0;
+          if (h.prefix) {
+            const actualPre = text.slice(Math.max(0, idx - h.prefix.length), idx);
+            if (actualPre.toLowerCase() === h.prefix.toLowerCase()) score += 2;
+          }
+          if (h.suffix) {
+            const actualSuf = text.slice(idx + targetLen, idx + targetLen + h.suffix.length);
+            if (actualSuf.toLowerCase() === h.suffix.toLowerCase()) score += 2;
+          }
+          if (score > bestScore) {
+            let conflict = false;
+            for (let k = idx; k < idx + targetLen; k++) {
+              if (claimed[k]) {
+                conflict = true;
+                break;
+              }
+            }
+            if (!conflict) {
+              bestScore = score;
+              bestPos = idx;
+            }
+          }
+          pos = idx + 1;
+        }
+        if (bestPos !== -1) {
+          matchedStart = bestPos;
+        }
+      }
 
-        while (remainingText.length > 0) {
-          const index = remainingText.toLowerCase().indexOf(searchStr);
-          if (index === -1) {
-            newParts.push({ text: remainingText, isHighlight: false, id: '', note: '', color: '' });
+      // 3. Fallback: match first unclaimed occurrence (never loop globally!)
+      if (matchedStart === -1) {
+        let pos = 0;
+        while (pos < text.length) {
+          const idx = text.toLowerCase().indexOf(targetText.toLowerCase(), pos);
+          if (idx === -1) break;
+          let conflict = false;
+          for (let k = idx; k < idx + targetLen; k++) {
+            if (claimed[k]) {
+              conflict = true;
+              break;
+            }
+          }
+          if (!conflict) {
+            matchedStart = idx;
             break;
           }
-
-          if (index > 0) {
-            newParts.push({ text: remainingText.slice(0, index), isHighlight: false, id: '', note: '', color: '' });
-          }
-          newParts.push({
-            text: remainingText.slice(index, index + highlight.text.length),
-            isHighlight: true,
-            id: highlight.id,
-            note: highlight.note || '',
-            color: highlight.color || 'yellow',
-          });
-          remainingText = remainingText.slice(index + highlight.text.length);
+          pos = idx + 1;
         }
+      }
+
+      if (matchedStart !== -1) {
+        for (let k = matchedStart; k < matchedStart + targetLen; k++) {
+          claimed[k] = 1;
+        }
+        intervals.push({
+          start: matchedStart,
+          end: matchedStart + targetLen,
+          id: h.id,
+          color: h.color || 'yellow',
+          note: h.note,
+          text: text.slice(matchedStart, matchedStart + targetLen),
+        });
+      }
+    }
+
+    if (intervals.length === 0) return text;
+
+    intervals.sort((a, b) => a.start - b.start);
+
+    const chunks: { text: string; isHighlight: boolean; id?: string; color?: string; note?: string }[] = [];
+    let cursor = 0;
+    for (const item of intervals) {
+      if (item.start > cursor) {
+        chunks.push({ text: text.slice(cursor, item.start), isHighlight: false });
+      }
+      chunks.push({
+        text: item.text,
+        isHighlight: true,
+        id: item.id,
+        color: item.color,
+        note: item.note,
       });
-      parts = newParts.filter((p) => p.text.length > 0);
-    });
+      cursor = item.end;
+    }
+    if (cursor < text.length) {
+      chunks.push({ text: text.slice(cursor), isHighlight: false });
+    }
 
     return (
       <>
-        {parts.map((part, i) => {
-          if (part.isHighlight) {
+        {chunks.map((part, i) => {
+          if (part.isHighlight && part.id) {
             const markClass = getHighlightMarkClass(part.color);
             return (
               <mark
@@ -209,7 +396,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   const rect = e.currentTarget.getBoundingClientRect();
-                  setActiveHighlightId(part.id);
+                  setActiveHighlightId(part.id!);
                   setActionPos({ x: rect.left + rect.width / 2, y: rect.top - 5 });
                 }}
                 title={part.note ? `Note: ${part.note} (Click to manage)` : 'Click to change color or remove'}
@@ -240,7 +427,12 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
             Reading Passage {currentPassage.partNumber}
           </p>
           {currentPassage.subtitle && (
-            <p className="text-xs text-slate-500 mt-0.5 select-text">{renderHighlightedText(currentPassage.subtitle)}</p>
+            <p
+              data-paragraph-id="subtitle"
+              className="text-xs text-slate-500 mt-0.5 select-text"
+            >
+              {renderHighlightedText(currentPassage.subtitle, 'subtitle')}
+            </p>
           )}
         </div>
 
@@ -258,15 +450,19 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
         onContextMenu={handleContextMenu}
         className={`flex-1 overflow-y-auto px-8 sm:px-10 py-8 space-y-6 ${fontClass} text-black select-text selection:bg-[#2060b2] selection:text-white ielts-scroll`}
       >
-        <h3 className="text-xl font-bold text-black mb-4 select-text">
-          {renderHighlightedText(currentPassage.title)}
+        <h3
+          data-paragraph-id="title"
+          className="text-xl font-bold text-black mb-4 select-text"
+        >
+          {renderHighlightedText(currentPassage.title, 'title')}
         </h3>
 
         <div className="space-y-4 select-text">
           {currentPassage.paragraphs.map((p, idx) => {
+            const paraId = p.id || `para-${idx}`;
             if (p.type === 'image' && p.imageUrl) {
               return (
-                <div key={p.id || idx} className="my-6 flex flex-col items-center justify-center">
+                <div key={paraId} className="my-6 flex flex-col items-center justify-center">
                   <ExamImageViewer imageUrl={p.imageUrl} imageAlt={p.alt || p.caption} imageZoomable={true} />
                   {p.caption && <p className="text-sm text-slate-500 mt-2 font-medium">{p.caption}</p>}
                 </div>
@@ -274,23 +470,37 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
             }
             if (p.type === 'heading') {
               return (
-                <h4 key={p.id || idx} className="text-lg font-bold text-black mt-6 mb-2">
-                  {renderHighlightedText(p.text || '')}
+                <h4
+                  key={paraId}
+                  data-paragraph-id={paraId}
+                  data-paragraph-index={idx}
+                  className="text-lg font-bold text-black mt-6 mb-2"
+                >
+                  {renderHighlightedText(p.text || '', paraId, idx)}
                 </h4>
               );
             }
             if (p.type === 'table') {
               return (
-                <div key={p.id || idx} className="my-4 overflow-x-auto border border-slate-300 rounded">
-                  <pre className="p-4 text-sm font-mono whitespace-pre-wrap text-black bg-slate-50">
-                    {renderHighlightedText(p.text || '')}
+                <div key={paraId} className="my-4 overflow-x-auto border border-slate-300 rounded">
+                  <pre
+                    data-paragraph-id={paraId}
+                    data-paragraph-index={idx}
+                    className="p-4 text-sm font-mono whitespace-pre-wrap text-black bg-slate-50"
+                  >
+                    {renderHighlightedText(p.text || '', paraId, idx)}
                   </pre>
                 </div>
               );
             }
             return (
-              <p key={p.id || idx} className="text-black leading-relaxed text-left">
-                {renderHighlightedText(p.text || '')}
+              <p
+                key={paraId}
+                data-paragraph-id={paraId}
+                data-paragraph-index={idx}
+                className="text-black leading-relaxed text-left"
+              >
+                {renderHighlightedText(p.text || '', paraId, idx)}
               </p>
             );
           })}
