@@ -93,12 +93,22 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => !!initialSession?.isLoggedIn);
   const [assignedTests, setAssignedTests] = useState<IELTSTest[]>(() => initialSession?.assignedTests || []);
   const [candidateResults, setCandidateResults] = useState<CandidateTestResult[]>([]);
-  const [isSelectingTest, setIsSelectingTest] = useState<boolean>(() => !!initialSession?.isSelectingTest);
+  const [isSelectingTest, setIsSelectingTest] = useState<boolean>(() => {
+    if (initialSession?.examPhase && initialSession.examPhase !== 'submitted') {
+      return false;
+    }
+    return !!initialSession?.isSelectingTest;
+  });
 
   // Test State
   const [allAvailableTests, setAllAvailableTests] = useState<IELTSTest[]>([ACADEMIC_TEST_1]);
   const [currentTest, setCurrentTest] = useState<IELTSTest>(() => initialSession?.currentTest || ACADEMIC_TEST_1);
-  const [hasConfirmedInstructions, setHasConfirmedInstructions] = useState<boolean>(() => !!initialSession?.hasConfirmedInstructions);
+  const [hasConfirmedInstructions, setHasConfirmedInstructions] = useState<boolean>(() => {
+    if (initialSession?.examPhase && initialSession.examPhase !== 'submitted') {
+      return true;
+    }
+    return !!initialSession?.hasConfirmedInstructions;
+  });
   const [examPhase, setExamPhase] = useState<'device_check' | 'section_intro' | 'active_section' | 'section_transition' | 'final_review' | 'submitted'>(() => initialSession?.examPhase || 'device_check');
   const [activeSection, setActiveSection] = useState<TestSection>(() => initialSession?.activeSection || 'listening');
   const [activePassageId, setActivePassageId] = useState<string>(() => initialSession?.activePassageId || 'p1');
@@ -217,6 +227,7 @@ export default function App() {
       sectionDeadline,
       isTimerRunning,
       currentTestId: currentTest?.id || 't1',
+      currentTest,
       lastSavedTimestamp: Date.now(),
       ...overrides,
     };
@@ -534,9 +545,21 @@ export default function App() {
     const trimmed = (item.text || '').trim();
     if (!trimmed) return;
 
+    const newItem: HighlightItem = {
+      ...item,
+      text: trimmed,
+      id: `hl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      createdAt: new Date().toISOString(),
+    };
+
     setHighlights((prev) => {
+      // Check if an exact identical highlight already exists at the same context and location
       const existingIdx = prev.findIndex(
-        (h) => h.text.trim().toLowerCase() === trimmed.toLowerCase()
+        (h) =>
+          h.passageId === newItem.passageId &&
+          h.text.toLowerCase() === newItem.text.toLowerCase() &&
+          h.startOffset === newItem.startOffset &&
+          h.paragraphId === newItem.paragraphId
       );
       let next: HighlightItem[];
       if (existingIdx !== -1) {
@@ -547,12 +570,6 @@ export default function App() {
           note: item.note !== undefined ? item.note : next[existingIdx].note,
         };
       } else {
-        const newItem: HighlightItem = {
-          ...item,
-          text: trimmed,
-          id: `hl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          createdAt: new Date().toISOString(),
-        };
         next = [...prev, newItem];
       }
       persistSession({ highlights: next });
@@ -570,10 +587,7 @@ export default function App() {
 
   const handleRemoveHighlight = (id: string) => {
     setHighlights((prev) => {
-      const target = prev.find((h) => h.id === id);
-      const next = target
-        ? prev.filter((h) => h.id !== id && h.text.trim().toLowerCase() !== target.text.trim().toLowerCase())
-        : prev.filter((h) => h.id !== id);
+      const next = prev.filter((h) => h.id !== id);
       persistSession({ highlights: next });
       return next;
     });

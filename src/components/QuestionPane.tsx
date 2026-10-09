@@ -261,7 +261,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
             <React.Fragment key={`${q.id}-${i}`}>
               <HighlightText
                 text={part}
-                contextId={questionsContextId}
+                contextId={`question_${q.id}`}
                 highlights={highlights}
                 onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                 onUpdateHighlight={onUpdateHighlight}
@@ -291,23 +291,31 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
     if (sel && !sel.isCollapsed) {
       const text = sel.toString().trim();
       if (text.length > 0 && onAddHighlight) {
-        const segments = text
-          .split(/\r?\n/)
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0);
-        segments.forEach((seg) => {
-          onAddHighlight({
-            passageId: questionsContextId,
-            text: seg,
-            color,
-          });
+        let detectedContext = questionsContextId;
+        try {
+          const range = sel.getRangeAt(0);
+          const startNode = range.startContainer;
+          const element = startNode.nodeType === Node.ELEMENT_NODE ? (startNode as HTMLElement) : startNode.parentElement;
+          const contextEl = element?.closest('[data-highlight-context]');
+          if (contextEl) {
+            detectedContext = contextEl.getAttribute('data-highlight-context') || questionsContextId;
+          }
+        } catch {}
+        onAddHighlight({
+          passageId: detectedContext,
+          text,
+          color,
         });
         sel.removeAllRanges();
       }
     }
   };
 
+  const displayedQuestionIds = new Set(displayedQuestions.map((q) => `question_${q.id}`));
   const currentContextHighlights = (highlights || []).filter((h) => {
+    if (!h) return false;
+    if (displayedQuestionIds.has(h.passageId)) return true;
+    if (h.passageId.startsWith('block_')) return true;
     if (isReadingSet) return h.passageId === 'reading_questions' || h.passageId === 'questions';
     return h.passageId === 'listening_questions';
   });
@@ -340,6 +348,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
     return (
       <div
         key={q.id}
+        data-highlight-context={`question_${q.id}`}
         ref={(el) => {
           questionRefs.current[indexInDisplayed] = el;
         }}
@@ -419,7 +428,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
               <span className="whitespace-pre-wrap select-text">
                 <HighlightText
                   text={q.questionText}
-                  contextId={questionsContextId}
+                  contextId={`question_${q.id}`}
                   highlights={highlights}
                   onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                   onUpdateHighlight={onUpdateHighlight}
@@ -468,7 +477,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                     <span className="ml-3 text-[15px] text-black tracking-wide select-text">
                       <HighlightText
                         text={opt.label || ''}
-                        contextId={questionsContextId}
+                        contextId={`question_${q.id}`}
                         highlights={highlights}
                         onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                         onUpdateHighlight={onUpdateHighlight}
@@ -518,7 +527,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                     >
                       <HighlightText
                         text={h}
-                        contextId={questionsContextId}
+                        contextId={`question_${q.id}`}
                         highlights={highlights}
                         onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                         onUpdateHighlight={onUpdateHighlight}
@@ -535,7 +544,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                         {typeof cell === 'string' ? (
                           <HighlightText
                             text={cell}
-                            contextId={questionsContextId}
+                            contextId={`question_${q.id}`}
                             highlights={highlights}
                             onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                             onUpdateHighlight={onUpdateHighlight}
@@ -731,23 +740,23 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
 
                     {/* Group Instruction */}
                     {block.groupInstruction && (
-                      <p className="font-bold text-slate-800 text-sm whitespace-pre-wrap select-text mb-3">
+                      <div data-highlight-context={`block_group_${block.key}`} className="font-bold text-slate-800 text-sm whitespace-pre-wrap select-text mb-3">
                         <HighlightText
                           text={block.groupInstruction}
-                          contextId={questionsContextId}
+                          contextId={`block_group_${block.key}`}
                           highlights={highlights}
                           onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                           onUpdateHighlight={onUpdateHighlight}
                         />
-                      </p>
+                      </div>
                     )}
 
                     {/* Sub-instruction if any */}
                     {block.instruction && (
-                      <div className="text-xs font-semibold text-slate-700 bg-blue-50/70 border border-blue-100 rounded-lg px-3.5 py-2 mb-4 whitespace-pre-wrap select-text">
+                      <div data-highlight-context={`block_instruction_${block.key}`} className="text-xs font-semibold text-slate-700 bg-blue-50/70 border border-blue-100 rounded-lg px-3.5 py-2 mb-4 whitespace-pre-wrap select-text">
                         <HighlightText
                           text={block.instruction}
-                          contextId={questionsContextId}
+                          contextId={`block_instruction_${block.key}`}
                           highlights={highlights}
                           onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                           onUpdateHighlight={onUpdateHighlight}
@@ -867,11 +876,11 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                   /* Standard Block without Image */
                   <div className="space-y-4">
                     {block.groupInstruction && (
-                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                      <div data-highlight-context={`block_group_${block.key}`} className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
                         <p className="font-bold text-slate-800 whitespace-pre-wrap select-text">
                           <HighlightText
                             text={block.groupInstruction}
-                            contextId={questionsContextId}
+                            contextId={`block_group_${block.key}`}
                             highlights={highlights}
                             onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                             onUpdateHighlight={onUpdateHighlight}
@@ -881,10 +890,10 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                     )}
 
                     {block.instruction && (
-                      <div className="text-sm font-semibold text-slate-800 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 whitespace-pre-wrap select-text">
+                      <div data-highlight-context={`block_instruction_${block.key}`} className="text-sm font-semibold text-slate-800 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 whitespace-pre-wrap select-text">
                         <HighlightText
                           text={block.instruction}
-                          contextId={questionsContextId}
+                          contextId={`block_instruction_${block.key}`}
                           highlights={highlights}
                           onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
                           onUpdateHighlight={onUpdateHighlight}

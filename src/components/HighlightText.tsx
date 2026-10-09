@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HighlightItem } from '../types';
-import { getHighlightMarkClass, HighlightColor } from '../lib/highlightColors';
+import { getHighlightMarkClass } from '../lib/highlightColors';
 import { HighlightActionPopover } from './HighlightActionPopover';
 
 interface HighlightTextProps {
@@ -23,12 +23,13 @@ export const HighlightText: React.FC<HighlightTextProps> = ({
 
   if (!text) return null;
 
-  // Gather active highlights - matching words and phrases globally across the exam
-  const validHighlights = (highlights || [])
-    .filter((h) => h && h.text && h.text.trim().length > 0)
-    .sort((a, b) => b.text.trim().length - a.text.trim().length);
+  // Filter highlights strictly for this specific context (e.g. question_4, block_instructions, etc.)
+  const contextHighlights = (highlights || []).filter((h) => {
+    if (!h || !h.text) return false;
+    return h.passageId === contextId;
+  });
 
-  if (validHighlights.length === 0) return <>{text}</>;
+  if (contextHighlights.length === 0) return <>{text}</>;
 
   interface Interval {
     start: number;
@@ -43,42 +44,101 @@ export const HighlightText: React.FC<HighlightTextProps> = ({
   const claimed = new Uint8Array(text.length);
   const lowerText = text.toLowerCase();
 
-  for (const h of validHighlights) {
+  // Sort highlights by length descending to match longer phrases first
+  const sorted = [...contextHighlights].sort(
+    (a, b) => b.text.trim().length - a.text.trim().length
+  );
+
+  for (const h of sorted) {
     const targetText = h.text.trim();
     const targetLen = targetText.length;
     if (targetLen === 0) continue;
     const targetLower = targetText.toLowerCase();
 
-    // Match all occurrences of this word/phrase in the text
-    let pos = 0;
-    while (pos < lowerText.length) {
-      const idx = lowerText.indexOf(targetLower, pos);
-      if (idx === -1) break;
+    let matchedStart = -1;
 
-      let conflict = false;
-      const end = idx + targetLen;
-      for (let k = idx; k < end; k++) {
-        if (claimed[k]) {
-          conflict = true;
+    // 1. Try matching with startOffset & endOffset if valid and unclaimed
+    if (
+      h.startOffset !== undefined &&
+      h.startOffset >= 0 &&
+      h.startOffset + targetLen <= text.length
+    ) {
+      const candidateSub = text.slice(h.startOffset, h.startOffset + targetLen).toLowerCase();
+      if (candidateSub === targetLower) {
+        let isFree = true;
+        for (let k = h.startOffset; k < h.startOffset + targetLen; k++) {
+          if (claimed[k]) {
+            isFree = false;
+            break;
+          }
+        }
+        if (isFree) {
+          matchedStart = h.startOffset;
+        }
+      }
+    }
+
+    // 2. If not matched by offset, try matching with prefix context
+    if (matchedStart === -1 && h.prefix) {
+      const prefixLower = h.prefix.slice(-15).toLowerCase();
+      let searchIdx = 0;
+      while (searchIdx < lowerText.length) {
+        const foundIdx = lowerText.indexOf(targetLower, searchIdx);
+        if (foundIdx === -1) break;
+        const textBefore = lowerText.slice(Math.max(0, foundIdx - prefixLower.length), foundIdx);
+        if (textBefore.endsWith(prefixLower)) {
+          let isFree = true;
+          for (let k = foundIdx; k < foundIdx + targetLen; k++) {
+            if (claimed[k]) {
+              isFree = false;
+              break;
+            }
+          }
+          if (isFree) {
+            matchedStart = foundIdx;
+            break;
+          }
+        }
+        searchIdx = foundIdx + 1;
+      }
+    }
+
+    // 3. Fallback: match the first unclaimed occurrence of targetText in this text
+    if (matchedStart === -1) {
+      let searchIdx = 0;
+      while (searchIdx < lowerText.length) {
+        const foundIdx = lowerText.indexOf(targetLower, searchIdx);
+        if (foundIdx === -1) break;
+        let isFree = true;
+        for (let k = foundIdx; k < foundIdx + targetLen; k++) {
+          if (claimed[k]) {
+            isFree = false;
+            break;
+          }
+        }
+        if (isFree) {
+          matchedStart = foundIdx;
           break;
         }
+        searchIdx = foundIdx + 1;
       }
+    }
 
-      if (!conflict) {
-        for (let k = idx; k < end; k++) {
-          claimed[k] = 1;
-        }
-        intervals.push({
-          start: idx,
-          end,
-          id: h.id,
-          color: (h.color as string) || 'yellow',
-          note: h.note,
-          text: text.slice(idx, end),
-        });
+    // If an unclaimed occurrence was found, claim it for this highlight item
+    // NOTE: Only ONE occurrence is claimed per highlight item!
+    if (matchedStart !== -1) {
+      const matchedEnd = matchedStart + targetLen;
+      for (let k = matchedStart; k < matchedEnd; k++) {
+        claimed[k] = 1;
       }
-
-      pos = idx + Math.max(1, targetLen);
+      intervals.push({
+        start: matchedStart,
+        end: matchedEnd,
+        id: h.id,
+        color: (h.color as string) || 'yellow',
+        note: h.note,
+        text: text.slice(matchedStart, matchedEnd),
+      });
     }
   }
 
@@ -106,37 +166,37 @@ export const HighlightText: React.FC<HighlightTextProps> = ({
   }
 
   const activeHighlight = activeHighlightId
-    ? validHighlights.find((h) => h.id === activeHighlightId)
+    ? contextHighlights.find((h) => h.id === activeHighlightId)
     : null;
 
   return (
     <>
       {parts.map((part, i) => {
-        if (part.isHighlight) {
+        if (part.isHighlight && part.id) {
           const markClass = getHighlightMarkClass(part.color);
           return (
             <mark
               key={`${part.id}-${i}`}
-              className={`${markClass} cursor-pointer rounded-xs px-0.5 py-0.2 relative group transition-colors select-text inline`}
+              className={`${markClass} cursor-pointer rounded-xs px-0.5 py-0.2 relative group select-text inline transition-colors`}
               onClick={(e) => {
                 e.stopPropagation();
                 const rect = e.currentTarget.getBoundingClientRect();
-                setActiveHighlightId(part.id);
-                setActionPos({ x: rect.left + rect.width / 2, y: rect.top - 5 });
+                setActionPos({
+                  x: rect.left + rect.width / 2,
+                  y: rect.top - 8,
+                });
+                setActiveHighlightId(part.id!);
               }}
-              title={part.note ? `Note: ${part.note} (Click to manage)` : 'Click to change color or remove'}
+              title={part.note ? `Note: ${part.note}` : 'Click to edit or remove highlight'}
             >
               {part.text}
               {part.note && (
-                <span
-                  className="inline-block w-2 h-2 ml-0.5 align-top bg-blue-600 rounded-full border border-white shadow-2xs"
-                  title={`Note: ${part.note}`}
-                />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600 align-top ml-0.5" />
               )}
             </mark>
           );
         }
-        return <React.Fragment key={`text-${i}`}>{part.text}</React.Fragment>;
+        return <span key={i}>{part.text}</span>;
       })}
 
       {activeHighlight && actionPos && (
@@ -145,16 +205,16 @@ export const HighlightText: React.FC<HighlightTextProps> = ({
           y={actionPos.y}
           currentColor={activeHighlight.color}
           note={activeHighlight.note}
-          onChangeColor={(newColor: HighlightColor) => {
+          onChangeColor={(col) => {
             if (onUpdateHighlight) {
-              onUpdateHighlight(activeHighlight.id, { color: newColor });
+              onUpdateHighlight(activeHighlight.id, { color: col });
             }
             setActiveHighlightId(null);
             setActionPos(null);
           }}
-          onSaveNote={(newNote: string) => {
+          onSaveNote={(note) => {
             if (onUpdateHighlight) {
-              onUpdateHighlight(activeHighlight.id, { note: newNote });
+              onUpdateHighlight(activeHighlight.id, { note });
             }
             setActiveHighlightId(null);
             setActionPos(null);

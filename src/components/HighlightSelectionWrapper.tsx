@@ -24,6 +24,7 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
 
   interface SelectionDetails {
     text: string;
+    contextId?: string;
     startOffset?: number;
     endOffset?: number;
     prefix?: string;
@@ -39,11 +40,21 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
 
     try {
       const range = selection.getRangeAt(0);
-      const root = containerRef.current;
-      if (root) {
+      const startNode = range.startContainer;
+      const element: HTMLElement | null =
+        startNode.nodeType === Node.ELEMENT_NODE
+          ? (startNode as HTMLElement)
+          : startNode.parentElement;
+
+      // Find the closest element that specifies a particular data-highlight-context (e.g. question_4, block_instructions, etc.)
+      const contextEl = element?.closest('[data-highlight-context]') as HTMLElement | null;
+      const specificContextId = contextEl?.getAttribute('data-highlight-context') || contextId;
+
+      const baseEl = contextEl || containerRef.current;
+      if (baseEl) {
         let charOffset = 0;
         let found = false;
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const walker = document.createTreeWalker(baseEl, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
           const textNode = walker.currentNode;
           if (textNode === range.startContainer) {
@@ -54,7 +65,7 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
           charOffset += textNode.textContent?.length || 0;
         }
 
-        const fullText = root.textContent || '';
+        const fullText = baseEl.textContent || '';
         const prefix = fullText.slice(Math.max(0, charOffset - 30), charOffset);
         const suffix = fullText.slice(
           charOffset + text.length,
@@ -63,15 +74,16 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
 
         return {
           text,
+          contextId: specificContextId,
           startOffset: found ? charOffset : undefined,
           endOffset: found ? charOffset + text.length : undefined,
           prefix,
           suffix,
         };
       }
-      return { text };
+      return { text, contextId: specificContextId };
     } catch {
-      return { text };
+      return { text, contextId };
     }
   };
 
@@ -125,7 +137,7 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
     const resolvedColor = color || defaultColor || getStoredHighlightColor();
 
     onAddHighlight({
-      passageId: contextId,
+      passageId: selectionDetails?.contextId || contextId,
       text: targetText,
       startOffset: selectionDetails?.startOffset,
       endOffset: selectionDetails?.endOffset,
@@ -146,7 +158,7 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
     const resolvedColor = color || defaultColor || getStoredHighlightColor();
 
     onAddHighlight({
-      passageId: contextId,
+      passageId: selectionDetails?.contextId || contextId,
       text: targetText,
       startOffset: selectionDetails?.startOffset,
       endOffset: selectionDetails?.endOffset,
