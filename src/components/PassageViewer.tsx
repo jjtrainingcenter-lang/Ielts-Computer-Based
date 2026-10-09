@@ -110,30 +110,32 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
   };
 
   const handleMouseUp = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
-      setSelectedText('');
-      setSelectionDetails(null);
-      setPopoverPos(null);
-      return;
-    }
-    const text = selection.toString().trim();
-    if (text.length > 0) {
-      try {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        if (rect.width > 0 || rect.height > 0) {
-          const details = captureSelectionDetails();
-          setSelectedText(text);
-          setSelectionDetails(details);
-          setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
-        }
-      } catch (e) {}
-    } else {
-      setSelectedText('');
-      setSelectionDetails(null);
-      setPopoverPos(null);
-    }
+    setTimeout(() => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        setSelectedText('');
+        setSelectionDetails(null);
+        setPopoverPos(null);
+        return;
+      }
+      const text = selection.toString().trim();
+      if (text.length > 0) {
+        try {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          if (rect.width > 0 || rect.height > 0) {
+            const details = captureSelectionDetails();
+            setSelectedText(text);
+            setSelectionDetails(details);
+            setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+          }
+        } catch (e) {}
+      } else {
+        setSelectedText('');
+        setSelectionDetails(null);
+        setPopoverPos(null);
+      }
+    }, 20);
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -216,12 +218,12 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
       ? 'text-[16px]'
       : 'text-[15px]';
 
-  const passageHighlights = (highlights || [])
-    .filter((h) => h.passageId === currentPassage?.id)
-    .sort((a, b) => b.text.length - a.text.length);
+  const validHighlights = (highlights || [])
+    .filter((h) => h && h.text && h.text.trim().length > 0)
+    .sort((a, b) => b.text.trim().length - a.text.trim().length);
 
   const activeHighlight = activeHighlightId
-    ? passageHighlights.find((h) => h.id === activeHighlightId)
+    ? validHighlights.find((h) => h.id === activeHighlightId)
     : null;
 
   const renderHighlightedText = (
@@ -230,23 +232,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
     paragraphIndex?: number
   ) => {
     if (!text) return null;
-    if (passageHighlights.length === 0) return text;
-
-    // Filter highlights that belong to this specific paragraph/element
-    const relevant = passageHighlights.filter((h) => {
-      if (!h || !h.text) return false;
-      if (h.paragraphId) {
-        return h.paragraphId === paragraphId;
-      }
-      if (typeof h.paragraphIndex === 'number' && typeof paragraphIndex === 'number') {
-        return h.paragraphIndex === paragraphIndex;
-      }
-      // Fallback for legacy items without paragraphId:
-      // only consider if text actually contains it
-      return text.toLowerCase().includes(h.text.toLowerCase());
-    });
-
-    if (relevant.length === 0) return text;
+    if (validHighlights.length === 0) return text;
 
     interface Interval {
       start: number;
@@ -259,105 +245,44 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
 
     const intervals: Interval[] = [];
     const claimed = new Uint8Array(text.length);
+    const lowerText = text.toLowerCase();
 
-    for (const h of relevant) {
-      const targetText = h.text;
+    for (const h of validHighlights) {
+      const targetText = h.text.trim();
       const targetLen = targetText.length;
       if (targetLen === 0) continue;
+      const targetLower = targetText.toLowerCase();
 
-      let matchedStart = -1;
+      // Highlight all occurrences of this word/phrase in the passage text
+      let pos = 0;
+      while (pos < lowerText.length) {
+        const idx = lowerText.indexOf(targetLower, pos);
+        if (idx === -1) break;
 
-      // 1. Try exact startOffset if saved
-      if (
-        typeof h.startOffset === 'number' &&
-        h.startOffset >= 0 &&
-        h.startOffset + targetLen <= text.length
-      ) {
-        const slice = text.slice(h.startOffset, h.startOffset + targetLen);
-        if (slice.toLowerCase() === targetText.toLowerCase()) {
-          let conflict = false;
-          for (let k = h.startOffset; k < h.startOffset + targetLen; k++) {
-            if (claimed[k]) {
-              conflict = true;
-              break;
-            }
-          }
-          if (!conflict) {
-            matchedStart = h.startOffset;
-          }
-        }
-      }
-
-      // 2. Disambiguate with prefix / suffix
-      if (matchedStart === -1 && (h.prefix || h.suffix)) {
-        let pos = 0;
-        let bestScore = 0;
-        let bestPos = -1;
-        while (pos < text.length) {
-          const idx = text.toLowerCase().indexOf(targetText.toLowerCase(), pos);
-          if (idx === -1) break;
-          let score = 0;
-          if (h.prefix) {
-            const actualPre = text.slice(Math.max(0, idx - h.prefix.length), idx);
-            if (actualPre.toLowerCase() === h.prefix.toLowerCase()) score += 2;
-          }
-          if (h.suffix) {
-            const actualSuf = text.slice(idx + targetLen, idx + targetLen + h.suffix.length);
-            if (actualSuf.toLowerCase() === h.suffix.toLowerCase()) score += 2;
-          }
-          if (score > bestScore) {
-            let conflict = false;
-            for (let k = idx; k < idx + targetLen; k++) {
-              if (claimed[k]) {
-                conflict = true;
-                break;
-              }
-            }
-            if (!conflict) {
-              bestScore = score;
-              bestPos = idx;
-            }
-          }
-          pos = idx + 1;
-        }
-        if (bestPos !== -1) {
-          matchedStart = bestPos;
-        }
-      }
-
-      // 3. Fallback: match first unclaimed occurrence (never loop globally!)
-      if (matchedStart === -1) {
-        let pos = 0;
-        while (pos < text.length) {
-          const idx = text.toLowerCase().indexOf(targetText.toLowerCase(), pos);
-          if (idx === -1) break;
-          let conflict = false;
-          for (let k = idx; k < idx + targetLen; k++) {
-            if (claimed[k]) {
-              conflict = true;
-              break;
-            }
-          }
-          if (!conflict) {
-            matchedStart = idx;
+        let conflict = false;
+        const end = idx + targetLen;
+        for (let k = idx; k < end; k++) {
+          if (claimed[k]) {
+            conflict = true;
             break;
           }
-          pos = idx + 1;
         }
-      }
 
-      if (matchedStart !== -1) {
-        for (let k = matchedStart; k < matchedStart + targetLen; k++) {
-          claimed[k] = 1;
+        if (!conflict) {
+          for (let k = idx; k < end; k++) {
+            claimed[k] = 1;
+          }
+          intervals.push({
+            start: idx,
+            end,
+            id: h.id,
+            color: (h.color as string) || 'yellow',
+            note: h.note,
+            text: text.slice(idx, end),
+          });
         }
-        intervals.push({
-          start: matchedStart,
-          end: matchedStart + targetLen,
-          id: h.id,
-          color: h.color || 'yellow',
-          note: h.note,
-          text: text.slice(matchedStart, matchedStart + targetLen),
-        });
+
+        pos = idx + Math.max(1, targetLen);
       }
     }
 
@@ -440,7 +365,7 @@ export const PassageViewer: React.FC<PassageViewerProps> = ({
         <HighlightPaletteBar
           activeColor={activeHighlightColor}
           onChangeColor={handlePaletteColorChange}
-          highlightCount={passageHighlights.length}
+          highlightCount={validHighlights.length}
         />
       </div>
 

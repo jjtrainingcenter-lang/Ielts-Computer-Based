@@ -58,6 +58,7 @@ interface StoredSession {
   writingTask1: string;
   writingTask2: string;
   timeRemainingSeconds: number;
+  sectionDeadline?: number | null;
   isTimerRunning: boolean;
   currentTestId: string;
   currentTest?: IELTSTest;
@@ -67,7 +68,10 @@ interface StoredSession {
 
 const getInitialSession = (): StoredSession | null => {
   try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    let raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) {
+      raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    }
     if (!raw) return null;
     const parsed: StoredSession = JSON.parse(raw);
     if (!parsed || !parsed.isLoggedIn) return null;
@@ -125,26 +129,37 @@ export default function App() {
     showTimer: true,
   });
 
-  // Timer calculation with elapsed time recovery
+  // Timestamp-based absolute timer engine with reload & sudden close survival
+  const [sectionDeadline, setSectionDeadline] = useState<number | null>(() => {
+    if (!initialSession || !initialSession.isTimerRunning) return null;
+    if (initialSession.sectionDeadline && initialSession.sectionDeadline > Date.now()) {
+      return initialSession.sectionDeadline;
+    }
+    if (initialSession.lastSavedTimestamp && initialSession.timeRemainingSeconds) {
+      const elapsed = Math.max(0, Math.floor((Date.now() - initialSession.lastSavedTimestamp) / 1000));
+      const remaining = Math.max(1, initialSession.timeRemainingSeconds - elapsed);
+      return Date.now() + remaining * 1000;
+    }
+    return Date.now() + (initialSession.timeRemainingSeconds || 3600) * 1000;
+  });
+
   const [timeRemainingSeconds, setTimeRemainingSeconds] = useState<number>(() => {
     if (!initialSession) return 3600;
-    if (initialSession.isTimerRunning && initialSession.lastSavedTimestamp) {
-      const elapsed = Math.max(0, Math.floor((Date.now() - initialSession.lastSavedTimestamp) / 1000));
-      return Math.max(0, (initialSession.timeRemainingSeconds ?? 3600) - elapsed);
+    if (initialSession.isTimerRunning) {
+      if (initialSession.sectionDeadline && initialSession.sectionDeadline > Date.now()) {
+        return Math.max(1, Math.floor((initialSession.sectionDeadline - Date.now()) / 1000));
+      }
+      if (initialSession.lastSavedTimestamp) {
+        const elapsed = Math.max(0, Math.floor((Date.now() - initialSession.lastSavedTimestamp) / 1000));
+        return Math.max(1, (initialSession.timeRemainingSeconds ?? 3600) - elapsed);
+      }
     }
     return initialSession.timeRemainingSeconds ?? 3600;
   });
-  
-  // Phase 2: Timestamp-based absolute timer engine
-  const [sectionDeadline, setSectionDeadline] = useState<number | null>(() => {
-    if (!initialSession || !initialSession.isTimerRunning) return null;
-    const elapsed = Math.max(0, Math.floor((Date.now() - initialSession.lastSavedTimestamp) / 1000));
-    const remaining = Math.max(0, (initialSession.timeRemainingSeconds ?? 3600) - elapsed);
-    return Date.now() + remaining * 1000;
-  });
+
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(() => {
     if (!initialSession) return false;
-    return !!initialSession.isTimerRunning && !!initialSession.hasConfirmedInstructions;
+    return !!initialSession.isTimerRunning && !!initialSession.hasConfirmedInstructions && initialSession.examPhase === 'active_section';
   });
 
   // Modals
@@ -179,46 +194,61 @@ export default function App() {
     initTests();
   }, [candidateId]);
 
-  // Auto-persist active exam state to localStorage so candidate won't lose work on page reload
+  // Robust session persistence to survive reload and sudden browser close
+  const persistSession = (overrides?: Partial<StoredSession>) => {
+    if (!isLoggedIn || isAdminLoggedIn) return;
+    const sessionData: StoredSession = {
+      candidate,
+      candidateName,
+      candidateId,
+      isLoggedIn,
+      isSelectingTest,
+      hasConfirmedInstructions,
+      examPhase,
+      activeSection,
+      activePassageId,
+      currentQuestionIndex,
+      userAnswers,
+      flaggedQuestions,
+      highlights,
+      writingTask1,
+      writingTask2,
+      timeRemainingSeconds,
+      sectionDeadline,
+      isTimerRunning,
+      currentTestId: currentTest?.id || 't1',
+      lastSavedTimestamp: Date.now(),
+      ...overrides,
+    };
+
+    try {
+      const serialized = JSON.stringify(sessionData);
+      localStorage.setItem(SESSION_STORAGE_KEY, serialized);
+      sessionStorage.setItem(SESSION_STORAGE_KEY, serialized);
+    } catch (err) {
+      console.warn("Storage quota exceeded or error, stripping heavy fields:", err);
+      try {
+        const safeSession = { ...sessionData, currentTest: undefined, assignedTests: undefined };
+        const safeSerialized = JSON.stringify(safeSession);
+        localStorage.setItem(SESSION_STORAGE_KEY, safeSerialized);
+        sessionStorage.setItem(SESSION_STORAGE_KEY, safeSerialized);
+      } catch (e) {}
+    }
+  };
+
+  // Auto-persist active exam state whenever state changes
   useEffect(() => {
     if (isLoggedIn && !isAdminLoggedIn) {
-      const sessionData: StoredSession = {
-        candidate,
-        candidateName,
-        candidateId,
-        isLoggedIn,
-        isSelectingTest,
-        hasConfirmedInstructions,
-        examPhase,
-        activeSection,
-        activePassageId,
-        currentQuestionIndex,
-        userAnswers,
-        flaggedQuestions,
-        highlights,
-        writingTask1,
-        writingTask2,
-        timeRemainingSeconds,
-        isTimerRunning,
-        currentTestId: currentTest.id,
-        currentTest,
-        assignedTests,
-        lastSavedTimestamp: Date.now(),
-      };
-      try {
-        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-      } catch (err) {
-        console.error("Failed to auto-save test session:", err);
-      }
+      persistSession();
     }
   }, [
     candidate,
-    isLoggedIn,
-    isAdminLoggedIn,
-    isSelectingTest,
-    hasConfirmedInstructions,
     candidateName,
     candidateId,
+    isLoggedIn,
+    isSelectingTest,
+    hasConfirmedInstructions,
+    examPhase,
     activeSection,
     activePassageId,
     currentQuestionIndex,
@@ -228,70 +258,48 @@ export default function App() {
     writingTask1,
     writingTask2,
     timeRemainingSeconds,
+    sectionDeadline,
     isTimerRunning,
-    currentTest,
-    assignedTests
+    currentTest?.id
   ]);
 
-  // Autosave session whenever important state changes
+  // Synchronous beforeunload, pagehide, and visibilitychange handlers to ensure no work is lost on sudden close or refresh
   useEffect(() => {
-    const saveStateBeforeExit = () => {
-      if (isLoggedIn && !isAdminLoggedIn) {
-        const sessionData: StoredSession = {
-          candidate,
-          candidateName,
-          candidateId,
-          isLoggedIn,
-          isSelectingTest,
-          hasConfirmedInstructions,
-          examPhase,
-          activeSection,
-          activePassageId,
-          currentQuestionIndex,
-          userAnswers,
-          flaggedQuestions,
-          highlights,
-          writingTask1,
-          writingTask2,
-          timeRemainingSeconds,
-          isTimerRunning,
-          currentTestId: currentTest.id,
-          currentTest,
-          assignedTests,
-          lastSavedTimestamp: Date.now(),
-        };
-        try {
-          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-        } catch (e) {}
-      }
-    };
-
-    const autosaveTimer = setTimeout(saveStateBeforeExit, 1000);
-
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      saveStateBeforeExit();
-      if (isLoggedIn && !isAdminLoggedIn && hasConfirmedInstructions && isTimerRunning) {
+      persistSession();
+      if (isLoggedIn && !isAdminLoggedIn && hasConfirmedInstructions && examPhase === 'active_section') {
         e.preventDefault();
         e.returnValue = '';
       }
     };
 
+    const handlePageHide = () => {
+      persistSession();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        persistSession();
+      }
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('pagehide', saveStateBeforeExit);
+    window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
-      clearTimeout(autosaveTimer);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', saveStateBeforeExit);
+      window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [
     candidate,
-    isLoggedIn,
-    isAdminLoggedIn,
-    hasConfirmedInstructions,
-    isTimerRunning,
-    isSelectingTest,
     candidateName,
     candidateId,
+    isLoggedIn,
+    isSelectingTest,
+    hasConfirmedInstructions,
+    examPhase,
     activeSection,
     activePassageId,
     currentQuestionIndex,
@@ -301,8 +309,9 @@ export default function App() {
     writingTask1,
     writingTask2,
     timeRemainingSeconds,
-    currentTest,
-    assignedTests
+    sectionDeadline,
+    isTimerRunning,
+    currentTest?.id
   ]);
 
   useEffect(() => {
@@ -488,38 +497,86 @@ export default function App() {
   const handleSelectSection = (sec: TestSection, resetTimer = true) => {
     setActiveSection(sec);
     setCurrentQuestionIndex(0);
+    let newDuration = timeRemainingSeconds;
+    let newDeadline = sectionDeadline;
     if (resetTimer) {
-      const duration = getSectionDurationSeconds(sec, currentTest, candidate);
-      setTimeRemainingSeconds(duration);
-      setSectionDeadline(Date.now() + duration * 1000);
+      newDuration = getSectionDurationSeconds(sec, currentTest, candidate);
+      setTimeRemainingSeconds(newDuration);
+      newDeadline = Date.now() + newDuration * 1000;
+      setSectionDeadline(newDeadline);
     }
+    persistSession({
+      activeSection: sec,
+      currentQuestionIndex: 0,
+      timeRemainingSeconds: newDuration,
+      sectionDeadline: newDeadline,
+      examPhase: 'active_section',
+    });
   };
 
   const handleAnswerChange = (qId: string, answer: string) => {
-    setUserAnswers((prev) => ({ ...prev, [qId]: answer }));
+    setUserAnswers((prev) => {
+      const next = { ...prev, [qId]: answer };
+      persistSession({ userAnswers: next });
+      return next;
+    });
   };
 
   const handleToggleFlag = (qId: string) => {
-    setFlaggedQuestions((prev) => ({ ...prev, [qId]: !prev[qId] }));
+    setFlaggedQuestions((prev) => {
+      const next = { ...prev, [qId]: !prev[qId] };
+      persistSession({ flaggedQuestions: next });
+      return next;
+    });
   };
 
   const handleAddHighlight = (item: Omit<HighlightItem, 'id' | 'createdAt'>) => {
-    const newItem: HighlightItem = {
-      ...item,
-      id: `hl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      createdAt: new Date().toISOString(),
-    };
-    setHighlights((prev) => [...prev, newItem]);
+    const trimmed = (item.text || '').trim();
+    if (!trimmed) return;
+
+    setHighlights((prev) => {
+      const existingIdx = prev.findIndex(
+        (h) => h.text.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      let next: HighlightItem[];
+      if (existingIdx !== -1) {
+        next = [...prev];
+        next[existingIdx] = {
+          ...next[existingIdx],
+          color: item.color || next[existingIdx].color,
+          note: item.note !== undefined ? item.note : next[existingIdx].note,
+        };
+      } else {
+        const newItem: HighlightItem = {
+          ...item,
+          text: trimmed,
+          id: `hl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          createdAt: new Date().toISOString(),
+        };
+        next = [...prev, newItem];
+      }
+      persistSession({ highlights: next });
+      return next;
+    });
   };
 
   const handleUpdateHighlight = (id: string, updates: Partial<HighlightItem>) => {
-    setHighlights((prev) =>
-      prev.map((h) => (h.id === id ? { ...h, ...updates } : h))
-    );
+    setHighlights((prev) => {
+      const next = prev.map((h) => (h.id === id ? { ...h, ...updates } : h));
+      persistSession({ highlights: next });
+      return next;
+    });
   };
 
   const handleRemoveHighlight = (id: string) => {
-    setHighlights((prev) => prev.filter((h) => h.id !== id));
+    setHighlights((prev) => {
+      const target = prev.find((h) => h.id === id);
+      const next = target
+        ? prev.filter((h) => h.id !== id && h.text.trim().toLowerCase() !== target.text.trim().toLowerCase())
+        : prev.filter((h) => h.id !== id);
+      persistSession({ highlights: next });
+      return next;
+    });
   };
 
   const handleEvaluateWritingAI = async () => {
@@ -753,7 +810,14 @@ export default function App() {
 
   if (isLoggedIn && !isAdminLoggedIn && hasConfirmedInstructions) {
     if (examPhase === 'device_check') {
-      return <ExamDeviceCheck onContinue={() => setExamPhase('section_intro')} />;
+      return (
+        <ExamDeviceCheck
+          onContinue={() => {
+            setExamPhase('section_intro');
+            persistSession({ examPhase: 'section_intro' });
+          }}
+        />
+      );
     }
 
     if (examPhase === 'section_intro') {
@@ -761,9 +825,15 @@ export default function App() {
         <SectionIntro
           section={activeSection}
           onStart={() => {
+            const deadline = Date.now() + timeRemainingSeconds * 1000;
             setExamPhase('active_section');
-            setSectionDeadline(Date.now() + timeRemainingSeconds * 1000);
+            setSectionDeadline(deadline);
             setIsTimerRunning(true);
+            persistSession({
+              examPhase: 'active_section',
+              sectionDeadline: deadline,
+              isTimerRunning: true,
+            });
           }}
         />
       );
@@ -1067,8 +1137,14 @@ export default function App() {
               tasks={currentTest.writingTasks}
               task1Text={writingTask1}
               task2Text={writingTask2}
-              onChangeTask1={setWritingTask1}
-              onChangeTask2={setWritingTask2}
+              onChangeTask1={(txt) => {
+                setWritingTask1(txt);
+                persistSession({ writingTask1: txt });
+              }}
+              onChangeTask2={(txt) => {
+                setWritingTask2(txt);
+                persistSession({ writingTask2: txt });
+              }}
               settings={settings}
               highlights={highlights}
               onAddHighlight={handleAddHighlight}
@@ -1143,7 +1219,10 @@ export default function App() {
         <QuestionNavigator
           questions={sectionQuestions}
           currentQuestionIndex={currentQuestionIndex}
-          onSelectQuestion={setCurrentQuestionIndex}
+          onSelectQuestion={(idx) => {
+            setCurrentQuestionIndex(idx);
+            persistSession({ currentQuestionIndex: idx });
+          }}
           userAnswers={userAnswers}
           markedQuestions={flaggedQuestions}
           onToggleMark={handleToggleFlag}

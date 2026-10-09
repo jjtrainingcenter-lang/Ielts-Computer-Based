@@ -252,14 +252,20 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
   const renderInlineCompletion = (q: Question) => {
     const parts = (q.questionText || '').split(/___|\[BLANK\]|_{3,}/g);
     return (
-      <span className="leading-loose inline-flex items-center flex-wrap gap-y-2">
+      <span className="leading-loose inline-flex items-center flex-wrap gap-y-2 select-text">
         {parts.map((part, i) => {
           const blankKey = i === 0 ? q.id : `${q.id}_blank_${i}`;
           const blankAnswer = userAnswers[blankKey] || '';
           const boxNumber = q.questionNumber + i;
           return (
             <React.Fragment key={`${q.id}-${i}`}>
-              <span>{part}</span>
+              <HighlightText
+                text={part}
+                contextId={questionsContextId}
+                highlights={highlights}
+                onRemoveHighlight={(id) => onRemoveHighlight && onRemoveHighlight(id)}
+                onUpdateHighlight={onUpdateHighlight}
+              />
               {i < parts.length - 1 && (
                 <span className="inline-block relative mx-2 align-middle">
                   <input
@@ -597,7 +603,11 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden select-text relative">
+    <HighlightSelectionWrapper
+      contextId={questionsContextId}
+      onAddHighlight={(highlight) => onAddHighlight && onAddHighlight(highlight)}
+      className="flex flex-col h-full bg-white overflow-hidden select-text relative"
+    >
       {isReadingSet && displayedQuestions.length > 0 && (
         <div className="shrink-0 px-8 py-3 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center justify-between gap-4">
@@ -641,11 +651,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
         </div>
       )}
 
-      <HighlightSelectionWrapper
-        contextId={questionsContextId}
-        onAddHighlight={(highlight) => onAddHighlight && onAddHighlight(highlight)}
-        className="p-4 sm:p-8 flex flex-col gap-8 overflow-y-auto flex-1 ielts-scroll select-text"
-      >
+      <div className="p-4 sm:p-8 flex flex-col gap-8 overflow-y-auto flex-1 ielts-scroll select-text">
         <div ref={containerRef} className="flex flex-col gap-8">
           {questionBlocks.map((block) => {
             const hasImage = !!block.groupImage?.url;
@@ -895,7 +901,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
             );
           })}
         </div>
-      </HighlightSelectionWrapper>
+      </div>
 
       {/* Floating Picture-in-Picture Reference Card */}
       {pinnedImage && (
@@ -983,6 +989,6 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </HighlightSelectionWrapper>
   );
 };

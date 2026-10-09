@@ -76,31 +76,33 @@ export const HighlightSelectionWrapper: React.FC<HighlightSelectionWrapperProps>
   };
 
   const handleMouseUp = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
-      setSelectedText('');
-      setSelectionDetails(null);
-      setPopoverPos(null);
-      return;
-    }
+    setTimeout(() => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        setSelectedText('');
+        setSelectionDetails(null);
+        setPopoverPos(null);
+        return;
+      }
 
-    const text = selection.toString().trim();
-    if (text.length > 0) {
-      try {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        if (rect.width > 0 || rect.height > 0) {
-          const details = captureSelectionDetails();
-          setSelectedText(text);
-          setSelectionDetails(details);
-          setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
-        }
-      } catch (e) {}
-    } else {
-      setSelectedText('');
-      setSelectionDetails(null);
-      setPopoverPos(null);
-    }
+      const text = selection.toString().trim();
+      if (text.length > 0) {
+        try {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          if (rect.width > 0 || rect.height > 0) {
+            const details = captureSelectionDetails();
+            setSelectedText(text);
+            setSelectionDetails(details);
+            setPopoverPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+          }
+        } catch (e) {}
+      } else {
+        setSelectedText('');
+        setSelectionDetails(null);
+        setPopoverPos(null);
+      }
+    }, 20);
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
