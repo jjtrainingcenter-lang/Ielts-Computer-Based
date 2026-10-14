@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { TestSection } from '../types';
-import { CheckCircle2, ArrowRight, Clock } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Clock, LogOut } from 'lucide-react';
 
 interface SectionTransitionProps {
   completedSection: TestSection;
   nextSection: TestSection | 'submit';
   onContinue: () => void;
+  onLogout?: () => void;
   isTimeExpired?: boolean;
   autoCountdown?: number;
 }
@@ -14,6 +15,7 @@ export const SectionTransition: React.FC<SectionTransitionProps> = ({
   completedSection,
   nextSection,
   onContinue,
+  onLogout,
   isTimeExpired = false,
   autoCountdown = 5,
 }) => {
@@ -83,6 +85,16 @@ export const SectionTransition: React.FC<SectionTransitionProps> = ({
             <span>{nextSection === 'submit' ? 'Submit Test Now' : `Start ${nextSection} Now`}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-xl transition-all text-xs flex items-center justify-center space-x-1.5"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log Out of Exam</span>
+            </button>
+          )}
           <span className="text-[11px] text-slate-400">
             You will not be able to return to the completed section once advanced.
           </span>

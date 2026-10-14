@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, HelpCircle } from 'lucide-react';
+import { Settings, HelpCircle, LogOut } from 'lucide-react';
 import { TestSection } from '../types';
 
 interface ExamHeaderProps {
@@ -12,6 +12,7 @@ interface ExamHeaderProps {
   onOpenSettings: () => void;
   onOpenHelp: () => void;
   onTimeExpired: () => void;
+  onVoluntaryLogout?: () => void;
 }
 
 export const ExamHeader: React.FC<ExamHeaderProps> = ({
@@ -23,7 +24,8 @@ export const ExamHeader: React.FC<ExamHeaderProps> = ({
   deadline,
   onOpenSettings,
   onOpenHelp,
-  onTimeExpired
+  onTimeExpired,
+  onVoluntaryLogout,
 }) => {
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
 
@@ -111,6 +113,18 @@ export const ExamHeader: React.FC<ExamHeaderProps> = ({
               <Settings className="w-4 h-4" />
               <span className="text-xs font-bold uppercase">Settings</span>
             </button>
+
+            {onVoluntaryLogout && (
+              <button
+                type="button"
+                onClick={onVoluntaryLogout}
+                className="flex items-center space-x-1.5 px-3 py-1.5 text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-300 hover:border-rose-600 rounded transition-all text-xs font-bold uppercase ml-1 shadow-2xs"
+                title="Voluntarily log out of exam (terminates exam session)"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Log Out</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

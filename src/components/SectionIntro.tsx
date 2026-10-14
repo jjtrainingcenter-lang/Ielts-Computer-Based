@@ -1,13 +1,14 @@
 import React from 'react';
 import { TestSection } from '../types';
-import { Headphones, BookOpen, FileEdit, Mic, Play } from 'lucide-react';
+import { Headphones, BookOpen, FileEdit, Mic, Play, LogOut } from 'lucide-react';
 
 interface SectionIntroProps {
   section: TestSection;
   onStart: () => void;
+  onLogout?: () => void;
 }
 
-export const SectionIntro: React.FC<SectionIntroProps> = ({ section, onStart }) => {
+export const SectionIntro: React.FC<SectionIntroProps> = ({ section, onStart, onLogout }) => {
   const getSectionDetails = () => {
     switch (section) {
       case 'listening':
@@ -95,10 +96,21 @@ export const SectionIntro: React.FC<SectionIntroProps> = ({ section, onStart }) 
           </ul>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 flex justify-center">
+        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-center gap-3">
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="w-full sm:w-auto px-5 py-3.5 text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-300 font-bold rounded-xl text-sm transition-all flex items-center justify-center space-x-1.5 shadow-2xs"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Log Out of Exam</span>
+            </button>
+          )}
+
           <button
             onClick={onStart}
-            className="px-8 py-3.5 bg-[#214162] hover:bg-[#1a334e] text-white font-bold rounded-xl shadow-md transition-all text-sm flex items-center space-x-2"
+            className="w-full sm:w-auto px-8 py-3.5 bg-[#214162] hover:bg-[#1a334e] text-white font-bold rounded-xl shadow-md transition-all text-sm flex items-center justify-center space-x-2"
           >
             <span>Start {details.title}</span>
             <Play className="w-4 h-4 fill-white" />

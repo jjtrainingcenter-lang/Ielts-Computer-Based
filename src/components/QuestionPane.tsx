@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Question, DisplaySettings, HighlightItem } from '../types';
 import { ExamImageViewer } from './ExamImageViewer';
+import { PinnedImageWindow } from './PinnedImageWindow';
+import { ImageLightboxModal } from './ImageLightboxModal';
 import { HighlightSelectionWrapper } from './HighlightSelectionWrapper';
 import { HighlightText } from './HighlightText';
 import { HighlightPaletteBar } from './HighlightPaletteBar';
@@ -133,6 +135,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
     url: string;
     alt?: string;
     caption?: string;
+    title?: string;
   } | null>(null);
 
   const currentQuestion = questions?.[currentQuestionIndex];
@@ -947,91 +950,36 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
         </div>
       </div>
 
-      {/* Floating Picture-in-Picture Reference Card */}
+      {/* Floating Picture-in-Picture Reference Window (Draggable, Resizable, Zoomable) */}
       {pinnedImage && (
-        <div
-          className={`fixed bottom-6 right-6 z-50 bg-white border-2 border-[#00529b] rounded-xl shadow-2xl transition-all duration-200 overflow-hidden ${
-            isFloatingMinimized ? 'w-64' : 'w-80 sm:w-96 max-h-[85vh] flex flex-col'
-          }`}
-        >
-          {/* Floating Header */}
-          <div className="flex items-center justify-between bg-[#00529b] text-white px-3 py-2 select-none">
-            <span className="text-xs font-bold flex items-center gap-1.5 truncate">
-              <Pin className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-              <span className="truncate">{pinnedImage.title || 'Pinned Reference Picture'}</span>
-            </span>
-            <div className="flex items-center gap-1 shrink-0 ml-2">
-              <button
-                type="button"
-                onClick={() => setIsFloatingMinimized(!isFloatingMinimized)}
-                className="p-1 hover:bg-white/20 rounded transition-colors"
-                title={isFloatingMinimized ? 'Expand' : 'Minimize'}
-              >
-                {isFloatingMinimized ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setLightboxImage(pinnedImage)}
-                className="p-1 hover:bg-white/20 rounded transition-colors"
-                title="Fullscreen"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setPinnedImage(null)}
-                className="p-1 hover:bg-white/20 rounded transition-colors"
-                title="Close Pinned Picture"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Floating Image Body */}
-          {!isFloatingMinimized && (
-            <div className="p-3 bg-slate-50 flex-1 overflow-auto flex flex-col items-center max-h-[380px] ielts-scroll">
-              <div className="bg-white p-1 rounded-lg border border-slate-200 shadow-inner w-full flex justify-center">
-                <img
-                  src={pinnedImage.url}
-                  alt={pinnedImage.alt || 'Reference Image'}
-                  className="max-h-[320px] w-auto object-contain rounded"
-                />
-              </div>
-              {pinnedImage.caption && (
-                <p className="text-[11px] text-slate-500 mt-2 text-center italic">{pinnedImage.caption}</p>
-              )}
-            </div>
-          )}
-        </div>
+        <PinnedImageWindow
+          imageUrl={pinnedImage.url}
+          imageAlt={pinnedImage.alt}
+          caption={pinnedImage.caption}
+          title={pinnedImage.title}
+          onClose={() => setPinnedImage(null)}
+          onFullscreen={() => setLightboxImage(pinnedImage)}
+        />
       )}
 
-      {/* Fullscreen Lightbox Modal */}
+      {/* Fullscreen Lightbox Modal (High-Res Zoom & Pan) */}
       {lightboxImage && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative max-w-5xl max-h-[92vh] bg-white rounded-xl overflow-hidden shadow-2xl flex flex-col w-full">
-            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900 text-white">
-              <span className="text-sm font-bold flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-blue-400" />
-                {lightboxImage.alt || 'High-Resolution Visual Reference'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setLightboxImage(null)}
-                className="p-1.5 hover:bg-white/20 rounded text-slate-300 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4 overflow-auto flex items-center justify-center bg-slate-100 flex-1 min-h-[300px]">
-              <img
-                src={lightboxImage.url}
-                alt={lightboxImage.alt || 'Full Resolution'}
-                className="max-h-[80vh] max-w-full object-contain rounded shadow-md"
-              />
-            </div>
-          </div>
-        </div>
+        <ImageLightboxModal
+          isOpen={!!lightboxImage}
+          imageUrl={lightboxImage.url}
+          imageAlt={lightboxImage.alt}
+          caption={lightboxImage.caption}
+          title={lightboxImage.title}
+          onClose={() => setLightboxImage(null)}
+          onTogglePin={() => {
+            if (pinnedImage?.url === lightboxImage.url) {
+              setPinnedImage(null);
+            } else {
+              setPinnedImage(lightboxImage);
+            }
+          }}
+          isPinned={pinnedImage?.url === lightboxImage.url}
+        />
       )}
     </HighlightSelectionWrapper>
   );

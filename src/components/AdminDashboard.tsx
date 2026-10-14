@@ -2542,6 +2542,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                             <td className="py-3 px-4">
                               <div className="font-semibold text-slate-800 truncate max-w-xs">{r.testTitle || r.testId}</div>
                               <div className="text-[10px] text-slate-400 font-mono">ID: {r.testId}</div>
+                              {(r.voluntaryLogout || r.status === 'terminated') && (
+                                <span className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                  Terminated (Voluntary Logout)
+                                </span>
+                              )}
                             </td>
 
                             <td className="py-3 px-4">

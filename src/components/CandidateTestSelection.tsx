@@ -232,13 +232,34 @@ export const CandidateTestSelection: React.FC<CandidateTestSelectionProps> = ({
                                   </div>
                                 );
                               })()}
-                              <div className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-xs font-bold">
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                <span>Submitted</span>
-                              </div>
+                              {result.voluntaryLogout || result.status === 'terminated' ? (
+                                <div className="inline-flex items-center space-x-1 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded text-xs font-bold">
+                                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                                  <span>Terminated (Voluntary Logout)</span>
+                                </div>
+                              ) : (
+                                <div className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-xs font-bold">
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                  <span>Submitted</span>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
+
+                        {/* Voluntary Logout Notice */}
+                        {isSubmitted && (result.voluntaryLogout || result.status === 'terminated') && (
+                          <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 flex items-start space-x-2">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                            <div className="space-y-0.5">
+                              <div className="font-bold">Voluntary Logout — Session Terminated</div>
+                              <p className="text-[11px] text-rose-800 leading-relaxed">
+                                You voluntarily logged out during the <span className="font-bold capitalize">{result.voluntaryLogoutSection || 'exam'}</span> section.
+                                Per examination policy, you cannot continue this test from where you left off. Contact your instructor or administrator if you require an authorized retake.
+                              </p>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Calculated Scores Breakdown for Student */}
                         {isSubmitted && (

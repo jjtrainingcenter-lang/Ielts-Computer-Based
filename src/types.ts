@@ -177,7 +177,10 @@ export interface CandidateTestResult {
   userAnswers?: Record<string, string>;
   highlights?: HighlightItem[];
   readingHighlights?: HighlightItem[];
-  status?: 'in-progress' | 'completed' | 'reading-completed';
+  status?: 'in-progress' | 'completed' | 'reading-completed' | 'terminated';
+  voluntaryLogout?: boolean;
+  voluntaryLogoutAt?: string;
+  voluntaryLogoutSection?: TestSection;
   completedSections?: TestSection[];
   writingTask1?: string;
   writingTask2?: string;

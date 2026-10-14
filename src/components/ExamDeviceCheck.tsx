@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Volume2, Play, Pause, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Volume2, Play, Pause, CheckCircle2, AlertCircle, LogOut } from 'lucide-react';
 import { subscribeToPretestAudioSampleUrl } from '../lib/audioSample';
 import { getGoogleDrivePreviewUrl, getMediaUrlCandidates, isGoogleDriveUrl } from '../lib/mediaUrls';
 
 interface ExamDeviceCheckProps {
   onContinue: () => void;
+  onLogout?: () => void;
 }
 
-export const ExamDeviceCheck: React.FC<ExamDeviceCheckProps> = ({ onContinue }) => {
+export const ExamDeviceCheck: React.FC<ExamDeviceCheckProps> = ({ onContinue, onLogout }) => {
   const [sampleUrl, setSampleUrl] = useState('');
   const [candidateIndex, setCandidateIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -148,10 +149,21 @@ export const ExamDeviceCheck: React.FC<ExamDeviceCheckProps> = ({ onContinue }) 
           )}
         </div>
 
-        <div className="pt-4 border-t border-slate-100 flex justify-center">
+        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-center gap-3">
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="w-full sm:w-auto px-5 py-3 text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-300 font-bold rounded-xl text-sm transition-all flex items-center justify-center space-x-1.5 shadow-2xs"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Log Out of Exam</span>
+            </button>
+          )}
+
           <button
             onClick={onContinue}
-            className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-md transition-all text-sm flex items-center space-x-2"
+            className="w-full sm:w-auto px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-md transition-all text-sm flex items-center justify-center space-x-2"
           >
             <span>Continue</span>
           </button>

@@ -21,6 +21,7 @@ import { CandidateInstructions } from './components/CandidateInstructions';
 import { ExamDeviceCheck } from './components/ExamDeviceCheck';
 import { SectionIntro } from './components/SectionIntro';
 import { SectionTransition } from './components/SectionTransition';
+import { VoluntaryLogoutModal } from './components/VoluntaryLogoutModal';
 import {
   getAllTests,
   getAssignedTestsForCandidate,
@@ -38,7 +39,7 @@ import {
   rememberAdminSession,
   hasRememberedAdminSession,
 } from './lib/firebase';
-import { HelpCircle, X, ChevronRight, ChevronLeft, CheckCircle, Headphones, BookOpen, FileEdit, Award, Eye, Clock, CheckCircle2 } from 'lucide-react';
+import { HelpCircle, X, ChevronRight, ChevronLeft, CheckCircle, Headphones, BookOpen, FileEdit, Award, Eye, Clock, CheckCircle2, LogOut } from 'lucide-react';
 import { calculateTestScores, calculateIELTSBand } from './lib/scoring';
 
 interface StoredSession {
@@ -179,6 +180,8 @@ export default function App() {
   const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isTimeExpiredTransition, setIsTimeExpiredTransition] = useState(false);
+  const [isVoluntaryLogoutModalOpen, setIsVoluntaryLogoutModalOpen] = useState(false);
+  const [isTerminatingSession, setIsTerminatingSession] = useState(false);
 
   // Load all tests and sync candidate tests
   useEffect(() => {
@@ -685,6 +688,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem(SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
     setIsLoggedIn(false);
     setCandidate(null);
     setCandidateId('');
@@ -692,6 +696,103 @@ export default function App() {
     setIsSelectingTest(false);
     setHasConfirmedInstructions(false);
     setIsTimerRunning(false);
+  };
+
+  const handleVoluntaryExamLogout = async () => {
+    setIsTerminatingSession(true);
+    setIsTimerRunning(false);
+    setSectionDeadline(null);
+
+    // Completely clear active session from localStorage & sessionStorage so it cannot be restored on refresh
+    try {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed clearing session keys', e);
+    }
+
+    // Clear saved audio playback timestamps for this test/candidate so audio doesn't resume
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('ielts_audio_pos') || key.includes(currentTest.id))) {
+          localStorage.removeItem(key);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed clearing audio keys on voluntary logout', e);
+    }
+
+    // Finalize candidate test result with terminated status and voluntaryLogout: true
+    try {
+      const calculated = calculateTestScores(currentTest, userAnswers);
+      const listeningCorrect = calculated.listeningScore;
+      const readingCorrect = calculated.readingScore;
+      const listeningBand = calculated.listeningBand;
+      const readingBand = calculated.readingBand;
+
+      const readingHighlightsList = highlights.filter(
+        (h) =>
+          h.passageId?.startsWith('p') ||
+          h.passageId?.includes('reading') ||
+          h.passageId?.includes('p1') ||
+          h.passageId?.includes('p2') ||
+          h.passageId?.includes('p3') ||
+          h.passageId?.includes('t2-p') ||
+          h.passageId?.includes('t3-p')
+      );
+
+      const resultRecord: CandidateTestResult = {
+        id: `res_${(candidateId || candidate?.id || '000000').replace(/\s+/g, '_')}_${currentTest.id.replace(/\s+/g, '_')}`,
+        candidateId: candidateId || candidate?.id || '000000',
+        candidateName: candidateName || candidate?.name || 'Candidate',
+        candidateDob: candidate?.dob,
+        testId: currentTest.id,
+        testTitle: currentTest.title,
+        listeningScore: listeningCorrect,
+        readingScore: readingCorrect,
+        listeningBand: listeningBand,
+        readingBand: readingBand,
+        overallBand: calculated.autoGradedBand,
+        userAnswers: userAnswers,
+        highlights: highlights,
+        readingHighlights: readingHighlightsList,
+        status: 'terminated',
+        voluntaryLogout: true,
+        voluntaryLogoutAt: new Date().toISOString(),
+        voluntaryLogoutSection: activeSection,
+        allowContinueSections: [], // strictly empty: candidate cannot continue from where they left
+        completedSections: [activeSection],
+        writingTask1: writingTask1,
+        writingTask2: writingTask2,
+        timestamp: new Date().toISOString(),
+      };
+
+      await saveTestResult(resultRecord);
+
+      setCandidateResults((prev) => {
+        const filtered = prev.filter((r) => r.testId !== currentTest.id);
+        return [...filtered, resultRecord];
+      });
+    } catch (err) {
+      console.error('Failed to record voluntary logout termination', err);
+    }
+
+    // Close modal and reset state back to unauthenticated login
+    setIsVoluntaryLogoutModalOpen(false);
+    setIsTerminatingSession(false);
+    setIsLoggedIn(false);
+    setCandidate(null);
+    setCandidateId('');
+    setCandidateName('');
+    setIsSelectingTest(false);
+    setHasConfirmedInstructions(false);
+    setExamPhase('device_check');
+    setUserAnswers({});
+    setFlaggedQuestions({});
+    setHighlights([]);
+    setWritingTask1('');
+    setWritingTask2('');
   };
 
   const handleAdminClick = async () => {
@@ -825,31 +926,57 @@ export default function App() {
   if (isLoggedIn && !isAdminLoggedIn && hasConfirmedInstructions) {
     if (examPhase === 'device_check') {
       return (
-        <ExamDeviceCheck
-          onContinue={() => {
-            setExamPhase('section_intro');
-            persistSession({ examPhase: 'section_intro' });
-          }}
-        />
+        <>
+          <ExamDeviceCheck
+            onContinue={() => {
+              setExamPhase('section_intro');
+              persistSession({ examPhase: 'section_intro' });
+            }}
+            onLogout={() => setIsVoluntaryLogoutModalOpen(true)}
+          />
+          <VoluntaryLogoutModal
+            isOpen={isVoluntaryLogoutModalOpen}
+            candidateName={candidateName}
+            candidateId={candidateId}
+            testTitle={currentTest.title}
+            activeSection={activeSection}
+            onCancel={() => setIsVoluntaryLogoutModalOpen(false)}
+            onConfirm={handleVoluntaryExamLogout}
+            isSubmitting={isTerminatingSession}
+          />
+        </>
       );
     }
 
     if (examPhase === 'section_intro') {
       return (
-        <SectionIntro
-          section={activeSection}
-          onStart={() => {
-            const deadline = Date.now() + timeRemainingSeconds * 1000;
-            setExamPhase('active_section');
-            setSectionDeadline(deadline);
-            setIsTimerRunning(true);
-            persistSession({
-              examPhase: 'active_section',
-              sectionDeadline: deadline,
-              isTimerRunning: true,
-            });
-          }}
-        />
+        <>
+          <SectionIntro
+            section={activeSection}
+            onStart={() => {
+              const deadline = Date.now() + timeRemainingSeconds * 1000;
+              setExamPhase('active_section');
+              setSectionDeadline(deadline);
+              setIsTimerRunning(true);
+              persistSession({
+                examPhase: 'active_section',
+                sectionDeadline: deadline,
+                isTimerRunning: true,
+              });
+            }}
+            onLogout={() => setIsVoluntaryLogoutModalOpen(true)}
+          />
+          <VoluntaryLogoutModal
+            isOpen={isVoluntaryLogoutModalOpen}
+            candidateName={candidateName}
+            candidateId={candidateId}
+            testTitle={currentTest.title}
+            activeSection={activeSection}
+            onCancel={() => setIsVoluntaryLogoutModalOpen(false)}
+            onConfirm={handleVoluntaryExamLogout}
+            isSubmitting={isTerminatingSession}
+          />
+        </>
       );
     }
 
@@ -859,21 +986,34 @@ export default function App() {
       const nextSection = currentIdx < order.length - 1 ? order[currentIdx + 1] : 'submit';
 
       return (
-        <SectionTransition
-          completedSection={activeSection}
-          nextSection={nextSection}
-          isTimeExpired={isTimeExpiredTransition}
-          autoCountdown={5}
-          onContinue={() => {
-            setIsTimeExpiredTransition(false);
-            if (nextSection === 'submit') {
-              handleSubmitTest();
-            } else {
-              handleSelectSection(nextSection);
-              setExamPhase('section_intro');
-            }
-          }}
-        />
+        <>
+          <SectionTransition
+            completedSection={activeSection}
+            nextSection={nextSection}
+            isTimeExpired={isTimeExpiredTransition}
+            autoCountdown={5}
+            onContinue={() => {
+              setIsTimeExpiredTransition(false);
+              if (nextSection === 'submit') {
+                handleSubmitTest();
+              } else {
+                handleSelectSection(nextSection);
+                setExamPhase('section_intro');
+              }
+            }}
+            onLogout={() => setIsVoluntaryLogoutModalOpen(true)}
+          />
+          <VoluntaryLogoutModal
+            isOpen={isVoluntaryLogoutModalOpen}
+            candidateName={candidateName}
+            candidateId={candidateId}
+            testTitle={currentTest.title}
+            activeSection={activeSection}
+            onCancel={() => setIsVoluntaryLogoutModalOpen(false)}
+            onConfirm={handleVoluntaryExamLogout}
+            isSubmitting={isTerminatingSession}
+          />
+        </>
       );
     }
 
@@ -1029,6 +1169,7 @@ export default function App() {
           setIsTimerRunning(false);
           handleSectionTimeExpired();
         }}
+        onVoluntaryLogout={() => setIsVoluntaryLogoutModalOpen(true)}
       />
 
       <div className="bg-white pt-2.5 px-6 pb-2 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs relative z-10 select-none">
@@ -1041,10 +1182,20 @@ export default function App() {
           </span>
         </div>
 
-        <div className="flex items-center space-x-4 shrink-0">
+        <div className="flex items-center space-x-3 shrink-0">
           <div className="text-right hidden sm:block">
             <span className="text-[11px] font-mono text-slate-500">Reg: #{candidateId}</span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsVoluntaryLogoutModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-300 rounded text-xs font-bold transition-all shadow-2xs"
+            title="Voluntarily log out of exam (terminates exam session)"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Log Out</span>
+          </button>
 
           <button
             onClick={() => {
@@ -1319,6 +1470,17 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <VoluntaryLogoutModal
+        isOpen={isVoluntaryLogoutModalOpen}
+        candidateName={candidateName}
+        candidateId={candidateId}
+        testTitle={currentTest.title}
+        activeSection={activeSection}
+        onCancel={() => setIsVoluntaryLogoutModalOpen(false)}
+        onConfirm={handleVoluntaryExamLogout}
+        isSubmitting={isTerminatingSession}
+      />
     </div>
   );
 }
