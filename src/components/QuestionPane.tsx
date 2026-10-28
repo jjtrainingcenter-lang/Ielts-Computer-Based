@@ -7,6 +7,7 @@ import { HighlightSelectionWrapper } from './HighlightSelectionWrapper';
 import { HighlightText } from './HighlightText';
 import { HighlightPaletteBar } from './HighlightPaletteBar';
 import { HighlightColor } from '../lib/highlightColors';
+import { AustralianVisaFlowChart, DearDiarySchedule, BankChequeForm } from './specialBlocks/SpecialTestBlocks';
 import {
   Columns,
   Rows,
@@ -649,6 +650,52 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
     );
   };
 
+  const renderBlockContent = (block: QuestionGroupBlock, isInsideImageBlock: boolean) => {
+    if (block.groupId === 't10-r-p3-flowchart') {
+      return (
+        <AustralianVisaFlowChart
+          groupId={block.groupId}
+          questions={block.questions}
+          userAnswers={userAnswers}
+          onAnswerChange={onAnswerChange}
+          highlights={highlights}
+          onRemoveHighlight={onRemoveHighlight}
+          onUpdateHighlight={onUpdateHighlight}
+          questionRefs={questionRefs}
+        />
+      );
+    }
+    if (block.groupId === 't10-l-part1-diary') {
+      return (
+        <DearDiarySchedule
+          groupId={block.groupId}
+          questions={block.questions}
+          userAnswers={userAnswers}
+          onAnswerChange={onAnswerChange}
+          highlights={highlights}
+          onRemoveHighlight={onRemoveHighlight}
+          onUpdateHighlight={onUpdateHighlight}
+          questionRefs={questionRefs}
+        />
+      );
+    }
+    if (block.groupId === 't10-l-part1-cheque') {
+      return (
+        <BankChequeForm
+          groupId={block.groupId}
+          questions={block.questions}
+          userAnswers={userAnswers}
+          onAnswerChange={onAnswerChange}
+          highlights={highlights}
+          onRemoveHighlight={onRemoveHighlight}
+          onUpdateHighlight={onUpdateHighlight}
+          questionRefs={questionRefs}
+        />
+      );
+    }
+    return block.questions.map(({ q, index }) => renderQuestionItem(q, index, isInsideImageBlock));
+  };
+
   return (
     <HighlightSelectionWrapper
       contextId={questionsContextId}
@@ -858,7 +905,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
 
                         {/* Right Questions Column */}
                         <div className="lg:col-span-6 xl:col-span-6 flex flex-col gap-6 bg-white p-3 sm:p-4 rounded-xl border border-slate-200">
-                          {block.questions.map(({ q, index }) => renderQuestionItem(q, index, true))}
+                          {renderBlockContent(block, true)}
                         </div>
                       </div>
                     ) : (
@@ -905,7 +952,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                           </div>
                         </div>
                         <div className="flex flex-col gap-6 bg-white p-3 sm:p-4 rounded-xl border border-slate-200">
-                          {block.questions.map(({ q, index }) => renderQuestionItem(q, index, true))}
+                          {renderBlockContent(block, true)}
                         </div>
                       </div>
                     )}
@@ -940,7 +987,7 @@ export const QuestionPane: React.FC<QuestionPaneProps> = ({
                     )}
 
                     <div className="flex flex-col gap-6">
-                      {block.questions.map(({ q, index }) => renderQuestionItem(q, index, false))}
+                      {renderBlockContent(block, false)}
                     </div>
                   </div>
                 )}

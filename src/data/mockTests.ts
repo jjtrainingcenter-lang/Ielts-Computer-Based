@@ -1,8 +1,9 @@
 import type { IELTSTest } from '../types';
 import { ACADEMIC_TEST_1 } from './mockTest1';
 import { ACADEMIC_TEST_2 } from './mockTest2';
+import { ACADEMIC_TEST_10 } from './mockTest10';
 
-export { ACADEMIC_TEST_1, ACADEMIC_TEST_2 };
+export { ACADEMIC_TEST_1, ACADEMIC_TEST_2, ACADEMIC_TEST_10 };
 
 const createDraftAcademicTest = (testNumber: number): IELTSTest => ({
   id: `jj-ielts-upgrade-practice-test-${testNumber}`,
@@ -32,6 +33,7 @@ export const ACADEMIC_TEST_5 = createDraftAcademicTest(5);
 export const ACADEMIC_TEST_6 = createDraftAcademicTest(6);
 export const ACADEMIC_TEST_7 = createDraftAcademicTest(7);
 export const ACADEMIC_TEST_8 = createDraftAcademicTest(8);
+export const ACADEMIC_TEST_9 = createDraftAcademicTest(9);
 
 export const BASE_ACADEMIC_TESTS: IELTSTest[] = [
   ACADEMIC_TEST_1,
@@ -42,4 +44,6 @@ export const BASE_ACADEMIC_TESTS: IELTSTest[] = [
   ACADEMIC_TEST_6,
   ACADEMIC_TEST_7,
   ACADEMIC_TEST_8,
+  ACADEMIC_TEST_9,
+  ACADEMIC_TEST_10,
 ];

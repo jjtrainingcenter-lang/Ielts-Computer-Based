@@ -1,5 +1,5 @@
 import { Candidate, IELTSTest, CandidateTestResult } from '../types';
-import { ACADEMIC_TEST_1 } from '../data/mockTests';
+import { ACADEMIC_TEST_1, BASE_ACADEMIC_TESTS } from '../data/mockTests';
 import { db, isConfigured } from './firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, getDoc, onSnapshot } from 'firebase/firestore';
 
@@ -308,7 +308,12 @@ export const subscribeToTests = (
           const data = testDoc.data() as IELTSTest;
           return { ...data, id: data.id || testDoc.id };
         });
-        onChange(tests.length > 0 ? tests : [ACADEMIC_TEST_1]);
+        BASE_ACADEMIC_TESTS.forEach(bt => {
+          if (!tests.some(t => t.id === bt.id)) {
+            tests.push(bt);
+          }
+        });
+        onChange(tests.length > 0 ? tests : BASE_ACADEMIC_TESTS);
       },
       error => console.error('Test catalog live-sync failed', error),
     );

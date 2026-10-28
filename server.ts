@@ -9,6 +9,11 @@ async function startServer() {
 
   app.use(express.json({ limit: "10mb" }));
 
+  // Unconditionally serve static assets from public directory
+  const publicPath = path.join(process.cwd(), "public");
+  app.use(express.static(publicPath));
+  app.use("/assets", express.static(path.join(process.cwd(), "public", "assets")));
+
   // API Route: AI Writing Evaluation using Gemini API
   app.post("/api/evaluate-writing", async (req, res) => {
     try {

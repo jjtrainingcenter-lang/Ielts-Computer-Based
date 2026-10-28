@@ -1,7 +1,7 @@
 import { ResizableSplitPane } from './components/ResizableSplitPane';
 import React, { useState, useEffect } from 'react';
 import { IELTSTest, TestSection, DisplaySettings, HighlightItem, WritingEvaluation, SpeakingEvaluation, Candidate, CandidateTestResult } from './types';
-import { ACADEMIC_TEST_1 } from './data/mockTests';
+import { ACADEMIC_TEST_1, BASE_ACADEMIC_TESTS } from './data/mockTests';
 import { ExamHeader } from './components/ExamHeader';
 import { LoginScreen } from './components/LoginScreen';
 import { CandidateTestSelection } from './components/CandidateTestSelection';
@@ -102,7 +102,7 @@ export default function App() {
   });
 
   // Test State
-  const [allAvailableTests, setAllAvailableTests] = useState<IELTSTest[]>([ACADEMIC_TEST_1]);
+  const [allAvailableTests, setAllAvailableTests] = useState<IELTSTest[]>(BASE_ACADEMIC_TESTS);
   const [currentTest, setCurrentTest] = useState<IELTSTest>(() => initialSession?.currentTest || ACADEMIC_TEST_1);
   const [hasConfirmedInstructions, setHasConfirmedInstructions] = useState<boolean>(() => {
     if (initialSession?.examPhase && initialSession.examPhase !== 'submitted') {
