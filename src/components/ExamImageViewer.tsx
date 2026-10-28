@@ -12,7 +12,7 @@ import {
   ArrowsUpFromLine,
   Expand,
 } from 'lucide-react';
-import { getGoogleDrivePreviewUrl, getMediaUrlCandidates } from '../lib/mediaUrls';
+import { getGoogleDrivePreviewUrl, getMediaUrlCandidates, isGoogleDriveUrl } from '../lib/mediaUrls';
 import { ImageLightboxModal } from './ImageLightboxModal';
 import { PinnedImageWindow } from './PinnedImageWindow';
 
@@ -214,9 +214,21 @@ export const ExamImageViewer: React.FC<ExamImageViewerProps> = ({
     return (
       <div className="w-full max-w-2xl rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 flex items-start gap-2">
         <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-        <div className="text-xs">
+        <div className="text-xs flex-1">
           <p className="font-bold">Image could not be displayed.</p>
-          <p className="mt-1">Use a public image URL or a Google Drive file shared as “Anyone with the link”.</p>
+          <p className="mt-1 text-slate-600">
+            Use a public image URL or a Google Drive file shared as “Anyone with the link”.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setDirectImageFailed(false);
+              setCandidateIndex(0);
+            }}
+            className="mt-2.5 px-3 py-1 bg-white border border-red-300 rounded text-red-700 font-semibold hover:bg-red-100 transition-colors text-xs inline-flex items-center gap-1 shadow-2xs"
+          >
+            <RotateCcw className="w-3 h-3" /> Retry Loading
+          </button>
         </div>
       </div>
     );
@@ -370,7 +382,7 @@ export const ExamImageViewer: React.FC<ExamImageViewerProps> = ({
               alt={imageAlt || 'Examination Media'}
               className="max-h-full max-w-full object-contain rounded transition-transform pointer-events-none select-none"
               onError={handleImageError}
-              referrerPolicy="no-referrer"
+              referrerPolicy={isGoogleDriveUrl(resolvedImageUrl) ? 'no-referrer' : undefined}
             />
           </div>
 

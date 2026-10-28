@@ -45,7 +45,23 @@ export const getMediaUrlCandidates = (rawUrl: string | undefined, kind: MediaKin
   if (!value) return [];
 
   const id = extractGoogleDriveFileId(value);
-  if (!id) return [value];
+  if (!id) {
+    const candidates = [value];
+    if (value.startsWith('/assets/test10/')) {
+      const fileName = value.replace('/assets/test10/', '');
+      candidates.push(`assets/test10/${fileName}`);
+      if (fileName === 'test10_diary.png') candidates.push('/assets/aistudio/test10_deardiary.png');
+      if (fileName === 'test10_barchart.png') candidates.push('/assets/aistudio/test10_listening_barchart.png');
+      if (fileName === 'test10_floorplan.png') candidates.push('/assets/aistudio/test10_listening_floorplan.png');
+    } else if (value.startsWith('/assets/aistudio/')) {
+      const fileName = value.replace('/assets/aistudio/', '');
+      candidates.push(`assets/aistudio/${fileName}`);
+      if (fileName === 'test10_deardiary.png') candidates.push('/assets/test10/test10_diary.png');
+      if (fileName === 'test10_listening_barchart.png') candidates.push('/assets/test10/test10_barchart.png');
+      if (fileName === 'test10_listening_floorplan.png') candidates.push('/assets/test10/test10_floorplan.png');
+    }
+    return unique(candidates);
+  }
 
   const encodedId = encodeURIComponent(id);
 

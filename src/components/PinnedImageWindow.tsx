@@ -12,6 +12,7 @@ import {
   Move,
   GripHorizontal,
 } from 'lucide-react';
+import { isGoogleDriveUrl } from '../lib/mediaUrls';
 
 export interface PinnedImageWindowProps {
   imageUrl: string;
@@ -363,7 +364,7 @@ export const PinnedImageWindow: React.FC<PinnedImageWindowProps> = ({
                 src={imageUrl}
                 alt={imageAlt || 'Pinned Reference'}
                 className="max-h-full max-w-full object-contain rounded shadow-xs pointer-events-none select-none"
-                referrerPolicy="no-referrer"
+                referrerPolicy={isGoogleDriveUrl(imageUrl) ? 'no-referrer' : undefined}
               />
             </div>
           </div>

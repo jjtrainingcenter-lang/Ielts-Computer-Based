@@ -12,6 +12,7 @@ import {
   Move,
   ImageIcon,
 } from 'lucide-react';
+import { isGoogleDriveUrl } from '../lib/mediaUrls';
 
 interface ImageLightboxModalProps {
   isOpen: boolean;
@@ -250,7 +251,7 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
             src={imageUrl}
             alt={imageAlt || 'Examination Media'}
             className="max-h-[86vh] max-w-[92vw] w-auto h-auto object-contain rounded-lg shadow-2xl pointer-events-none select-none"
-            referrerPolicy="no-referrer"
+            referrerPolicy={isGoogleDriveUrl(imageUrl) ? 'no-referrer' : undefined}
           />
         </div>
 
